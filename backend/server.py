@@ -5,7 +5,7 @@ import re
 import asyncio
 from sheet_sync import sync_from_sheet
 from sheet_writer import push_booking, script_url, ping as sheet_ping
-from mailer import on_booking_confirmed
+from mailer import on_booking_confirmed, reminder_loop
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -659,6 +659,7 @@ async def startup():
         for b in SEED_BIKES:
             await db.bikes.insert_one(Bike(**b).model_dump())
     asyncio.create_task(sheet_sync_loop())
+    asyncio.create_task(reminder_loop(db))
 
 
 app.include_router(api)

@@ -48,3 +48,5 @@ App scaricabile da tutti per gestire la giacenza di bici a noleggio (gravel, e-b
 - Public Apps Script code page: /api/codice (and /api/sheet-script/{token})
 - Apps Script Web App URL linked & verified (ping OK), stored in db.meta sheet_write
 - Booking confirmation email (Italian) via Emergent managed email: backend/mailer.py, sent once after store booking or Stripe paid; sender 'Mondo Noleggio', reply-to info@chientibike.it
+- Shop notification email to SHOP_EMAIL (info@chientibike.it) per confirmed booking; pickup reminder email day before at 12:00 Europe/Rome (reminder_loop, every 10 min) with address Contrada Le Grazie 43 Tolentino (MC), tel 3289832243
+- Google Sign-in (Emergent) already implemented & verified (button 'Continua con Google')

@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 8: Added /app/backend/tests/test_mailer_iter8.py with 11 tests, ALL PASSED. Covered (1) shop_email(bk): subject 'Nuova prenotazione NOL-SHOP1 – Mondo Noleggio' and rows Cliente/Email cliente/Telefono/Unità assegnata plus booking rows (Codice prenotazione/Bici/etc). (2) reminder_email(bk): subject 'Promemoria ritiro domani NOL-REM1 – Mondo Noleggio', shop address 'Contrada Le Grazie 43, Tolentino (MC)', phone '328 983 2243' and 9:00–19:00 hours. Verified confirmation email ALSO contains address+phone (shared _contact() section). (3) on_booking_confirmed(db,id) with SHOP_EMAIL monkeypatched to delivered@resend.dev sets BOTH confirmation_email_sent AND shop_email_sent; second call is idempotent (status stays 'confirmed'). send_email is stubbed to True to avoid Emergent proxy 429 rate-limits and zero real emails sent — the atomic claim-and-release logic in _send_once is still exercised. (4) send_due_reminders(db) with mailer.REMINDER_HOUR monkeypatched to 0 and a confirmed source='app' booking starting tomorrow (Rome date): sets reminder_email_sent=True; a second pass does not toggle the flag off (idempotent-by-filter); bookings starting 2 days from now are NOT emailed; bookings with status='cancelled' are NOT emailed. (5) Server wiring: static check that server.py startup registers asyncio.create_task(reminder_loop(db)) (confirmed at server.py:662). (6) POST /api/auth/session with session_id='not-a-real-session-id' returns 401 as required. Frontend: /login screen renders the google-login-button testID with label 'Continua con Google' (not 'Accedi con Google' as described in review request — this is a copy difference, not a functional defect; see minor note). Clicking it drives window.location.href to https://auth.emergentagent.com/?redirect=<origin>/ which immediately redirects through to Google OAuth with redirect_uri=https://demobackend.emergentagent.com/auth/v1/env/oauth/callback, confirming the entry-point hop through Emergent auth. We stopped at the Google login screen and did NOT complete the OAuth. SAFETY: 0 bookings with source='test' remained after the run; SHOP_EMAIL env was monkeypatched so no email was sent to the real shop inbox; send_email was stubbed in the Mongo-write tests to send 0 real emails; send_due_reminders does not touch the real Google Sheet so source='app' test bookings were safe.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [],
+    "copy_discrepancies": [
+      {"screen": "/login", "component": "google-login-button", "expected": "Accedi con Google", "actual": "Continua con Google", "note": "Review request wording differs from i18n.tsx:111 'google' key. 'Continua con Google' is Google's own recommended wording, so this is likely intentional. Flag only if main agent wants to match the spec text."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_mailer_iter8.py",
+    "/app/backend/tests/test_mailer.py",
+    "/app/test_reports/pytest/pytest_iter8.xml"
+  ],
+  "action_items": [
+    "(Optional) If the review spec string 'Accedi con Google' is binding, change frontend/src/i18n.tsx:111 'google' key value to 'Accedi con Google'. Otherwise leave as 'Continua con Google' (matches Google branding guidelines)."
+  ],
+  "critical_code_review_comments": [
+    "mailer._send_once (mailer.py:202-213) uses atomic find_one_and_update with {flag: {$ne: True}, **query} as the claim gate — the same proven pattern used for confirmation_email_sent now also protects shop_email_sent and reminder_email_sent. Correct and race-safe.",
+    "mailer.send_due_reminders (mailer.py:224-234) correctly: (a) gates by Europe/Rome hour via SHOP_TZ+REMINDER_HOUR, (b) scopes to status=confirmed+source=app+start matching tomorrow's Rome date, (c) uses distinct('id', ...) to collect only unclaimed ids, (d) delegates to _send_once so the per-id claim is still atomic. Monkeypatching REMINDER_HOUR=0 is the correct deterministic hook for tests.",
+    "server.py:662 schedules asyncio.create_task(reminder_loop(db)) inside the startup event — reminder_loop sleeps 600s between passes and swallows exceptions, so it won't crash startup. Good.",
+    "Note: send_due_reminders fires once per 10 minutes starting at or after 12:00 Rome local time (REMINDER_HOUR=12). If the service restarts after 12:00 on the day before a pickup and before the loop's first tick (<10 min window), the booking still gets its reminder on the next tick. If the service is DOWN across the entire 12:00–23:59 window of the day before pickup, no reminder is sent for that booking (no catch-up). Acceptable for current scope; call out if durability is required.",
+    "mailer.shop_email (mailer.py:185-190) does not escape() the extra rows explicitly, but _card()'s row generator (mailer.py:146-149) runs escape() on both key and value, so Cliente/Email cliente/Telefono/Unità assegnata are XSS-safe. OK.",
+    "mailer._send_once (mailer.py:208): when to_field is None we read os.environ.get('SHOP_EMAIL') per-send, so monkeypatch at test time works and prod runtime reads the current env — good. If SHOP_EMAIL is unset the function silently returns without claiming the flag (shop_email_sent stays unset so a later retry can succeed if the env is fixed). Reasonable behavior."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_mailer_iter8.py (new)"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (google-login-button present, correct testID, click drives Emergent auth flow with redirect query param; stopped before Google login as instructed)"},
+  "seed_data_creation": "Each test inserts bookings directly into Mongo with source='test' (confirmation tests) or source='app' (reminder tests); autouse _cleanup fixtures delete them by id after each test. Post-run verification: 0 source='test' bookings remain. send_due_reminders is DB-only and never calls sheet_writer, so source='app' bookings are also safe to use there without touching the real Google Sheet.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All iteration-8 mailer features (shop email, reminder email, two-flag on_booking_confirmed, send_due_reminders behaviour, invalid Google session 401, reminder_loop wired at startup) verified via /app/backend/tests/test_mailer_iter8.py. Re-run: `cd /app && python -m pytest backend/tests/test_mailer_iter8.py -v`. The parallel pytest-xdist default (2 workers) + Emergent email proxy rate limit means tests that hit the live proxy will intermittently 429; iter8 tests therefore stub mailer.send_email → True inside the fixtures that need to assert flag state (safe, zero real emails). The pre-existing test_mailer.py::TestSendEmail still exercises one real send through the Emergent proxy to delivered@resend.dev. SAFETY contract (unchanged): never create bookings via POST /api/bookings with payment_method=store and never mark a stripe booking paid for source='app' — those will write to the user's real Google Sheet via on_booking_confirmed→push_booking.",
+  "rca_of_issue": "N/A — no bugs found. One copy discrepancy flagged above."
+}
