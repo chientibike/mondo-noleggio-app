@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 3 - specs & bilingual descriptions. Backend: 31/31 pytest tests PASSED including 2 new iter-3 tests (test_seed_bikes_have_specs_and_description_en, test_admin_bike_crud_with_specs_and_description_en). GET /api/bikes returns the three new seeded bikes: Bianchi Arcadex GRX (gravel, €40, 5 specs incl. frame/groupset/brakes/wheels/weight), Specialized Turbo Creo 2 (egravel, €50, 8 specs incl. frame/motor/battery/range), Ghost E-Riot AM (ebike_mtb, €60, 9 specs incl. motor/battery/suspension/weight 24.5 kg). All three image_url load with HTTP 200 (Unsplash + Pexels). Each bike has non-empty description (IT) and description_en. POST/PUT /api/admin/bikes accepts and persists specs + description_en (verified via Create→GET and Update→GET). Admin bike form UI: has English description field (bike-form-description-en) and spec inputs for frame/motor/battery/range/suspension/groupset/brakes/wheels/weight (bike-form-spec-<key>) with correct localized labels (Telaio/Frame, Motore/Motor, etc.). Live edit test: changed Bianchi 'specs.frame' from 'Alluminio / Aluminium' to 'AlluminioEDIT / AluminiumEDIT' via UI → save toast 'Bici aggiornata' → GET /api/bikes confirms persistence → bike detail renders 'AlluminioEDIT' (IT half of the ' / ' pair). Bike detail (/bike/<id>) shows SPECIFICATIONS/Caratteristiche section (bike-specs) with per-key rows (bike-spec-frame, bike-spec-groupset, bike-spec-brakes, bike-spec-wheels, bike-spec-weight) and italian description. Switching Profile → language-en re-renders detail: description switches to description_en and spec values parse ' / ' correctly (frame: 'Aluminium', brakes: 'hydraulic disc'); switching back to language-it restores italian halves. specValue util in /app/frontend/src/format.ts correctly splits 'IT / EN' on ' / ' and picks the half for the active language; single-value specs (e.g. groupset 'Shimano GRX 2x11', wheels '700c, WTB Riddler 45 mm') render as-is in both languages. Regression: daily-only booking with 'Paga in negozio' still works end-to-end — size pick → book_now → /checkout → payment-method-store → confirm-booking-button → booking confirmed. BOTH confirm and payment buttons reachable (correct testIDs are 'payment-method-store' and 'confirm-booking-button'). Bianchi fully restored to original seed values (frame='Alluminio / Aluminium', full stock, image_url).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_backend.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py SEED_BIKES uses the 'IT / EN' convention consistently for bilingual spec values (frame, brakes, range, suspension, wheels), while single-value specs omit the ' / ' separator — matches the specValue(v) split rule in frontend/src/format.ts.",
+    "Migration logic (startup) only backfills seeded bikes whose doc has no 'specs' field (specs: {$exists: false}), preserving any manually-edited bike. This is idempotent and safe across restarts.",
+    "Bike + BikeIn pydantic models now include specs: Dict[str,str] and description_en: str; admin_update_bike and admin_create_bike simply pass model_dump() so both fields persist by construction.",
+    "specValue only splits on ' / ' (space-slash-space) — defensive against pathological values; a 3+ parts value falls back to raw string (verified in /app/frontend/src/format.ts:72-76).",
+    "SPEC_KEYS order on both detail and admin-form uses the same tuple, so admin-side editing matches detail display order 1:1."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_backend.py (added 2 iter-3 tests: specs/description_en seed check with image HTTP-200 and admin CRUD persistence; also hardened 3 flaky tests with per-size availability lookup so repeated runs don't deadlock on exhausted sizes)",
+    "/app/backend/tests/conftest.py (session teardown cancels test-user bookings to avoid long-term DB pollution)"
+  ],
+  "success_rate": {"backend": "100% (31/31)", "frontend": "100% - all iter-3 flows verified (specs IT/EN, admin edit propagation, regression booking store)"},
+  "seed_data_creation": "Backend restart would reseed 3 new iter-3 bikes if DB empty; migration path updates old-name docs with new photos/specs if specs field missing. During testing I edited Bianchi's frame spec via UI and restored it exactly via admin API PUT.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend URL in EXPO_PUBLIC_BACKEND_URL. Admin: admin@noleggionuovo.it/Admin2026!. Run `cd /app/backend && pytest tests/test_backend.py` for 31-test regression. Key testIDs for iter-3: bike-specs, bike-spec-{frame|motor|battery|range|suspension|groupset|brakes|wheels|weight}, bike-description, bike-form-description-en, bike-form-spec-{key}, bike-form-save, admin-edit-bike-{id}, payment-method-{store|stripe|paypal}, confirm-booking-button. Spec values follow 'ITA / ENG' convention — specValue() splits on ' / ' (space-slash-space); single-value specs render as-is. Viewport 390x844."
+}

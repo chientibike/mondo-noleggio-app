@@ -9,7 +9,8 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { api, type Booking } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Badge, Button } from "@/src/components/ui";
-import { PAYMENT_LABELS, STATUS_LABELS, euro, fmtRange, statusTone } from "@/src/format";
+import { PAYMENT_LABELS, STATUS_LABELS, euro, fmtRange, fmtUnits, statusTone } from "@/src/format";
+import { useI18n } from "@/src/i18n";
 import { startStripePayment } from "@/src/payments";
 import { usesNativeTabs } from "@/src/navigation";
 import { useToast } from "@/src/toast";
@@ -22,6 +23,7 @@ export default function BookingsScreen() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const toast = useToast();
+  const { t } = useI18n();
   const qc = useQueryClient();
   const [toCancel, setToCancel] = useState<Booking | null>(null);
   const [paying, setPaying] = useState<string | null>(null);
@@ -39,7 +41,7 @@ export default function BookingsScreen() {
   const cancel = useMutation({
     mutationFn: (id: string) => api(`/bookings/${id}/cancel`, { method: "POST" }),
     onSuccess: () => {
-      toast("Prenotazione annullata", "success");
+      toast(t("booking_cancelled"), "success");
       qc.invalidateQueries({ queryKey: ["my-bookings"] });
       qc.invalidateQueries({ queryKey: ["bikes"] });
     },
@@ -61,7 +63,7 @@ export default function BookingsScreen() {
 
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-      <Text style={styles.title}>Le mie prenotazioni</Text>
+      <Text style={styles.title}>{t("my_bookings")}</Text>
     </View>
   );
 
@@ -73,8 +75,8 @@ export default function BookingsScreen() {
         {header}
         <View style={styles.center}>
           <Ionicons name="calendar-outline" size={48} color={colors.muted} />
-          <Text style={styles.emptyTitle}>Accedi per vedere le tue prenotazioni</Text>
-          <Button testID="bookings-login-button" title="Accedi" onPress={() => router.push("/login")} />
+          <Text style={styles.emptyTitle}>{t("login_to_see")}</Text>
+          <Button testID="bookings-login-button" title={t("login")} onPress={() => router.push("/login")} />
         </View>
       </View>
     );
@@ -95,9 +97,9 @@ export default function BookingsScreen() {
           ListEmptyComponent={
             <View style={styles.center}>
               <Ionicons name="bicycle-outline" size={48} color={colors.muted} />
-              <Text style={styles.emptyTitle}>Nessuna prenotazione</Text>
-              <Text style={styles.muted}>Scegli una bici e prenota il tuo giro.</Text>
-              <Button testID="bookings-browse-button" title="Vedi le bici" onPress={() => router.push("/")} variant="secondary" />
+              <Text style={styles.emptyTitle}>{t("no_bookings")}</Text>
+              <Text style={styles.muted}>{t("no_bookings_sub")}</Text>
+              <Button testID="bookings-browse-button" title={t("browse_bikes")} onPress={() => router.push("/")} variant="secondary" />
             </View>
           }
           renderItem={({ item }) => {
@@ -108,7 +110,7 @@ export default function BookingsScreen() {
                   <Image source={{ uri: item.bike_image }} style={styles.thumb} contentFit="cover" />
                   <View style={{ flex: 1, gap: 4 }}>
                     <Text style={styles.bikeName} numberOfLines={1}>{item.bike_name}</Text>
-                    <Text style={styles.meta}>Taglia {item.size} · {item.mode === "hourly" ? `${item.units} ore` : `${item.units} giorni`}</Text>
+                    <Text style={styles.meta}>{t("size_x", { s: item.size })} · {fmtUnits(item.mode, item.units)}</Text>
                     <Text style={styles.meta}>{fmtRange(item)}</Text>
                   </View>
                   <Text style={styles.total}>{euro(item.total)}</Text>
@@ -120,9 +122,9 @@ export default function BookingsScreen() {
                 {active && (
                   <View style={styles.actions}>
                     {item.payment_method === "stripe" && item.payment_status !== "paid" && (
-                      <Button testID={`booking-pay-${item.id}`} title="Paga ora" icon="card-outline" loading={paying === item.id} onPress={() => pay(item)} style={{ flex: 1 }} />
+                      <Button testID={`booking-pay-${item.id}`} title={t("pay_now")} icon="card-outline" loading={paying === item.id} onPress={() => pay(item)} style={{ flex: 1 }} />
                     )}
-                    <Button testID={`booking-cancel-${item.id}`} title="Annulla" variant="ghost" onPress={() => setToCancel(item)} style={{ flex: 1 }} />
+                    <Button testID={`booking-cancel-${item.id}`} title={t("cancel")} variant="ghost" onPress={() => setToCancel(item)} style={{ flex: 1 }} />
                   </View>
                 )}
               </View>
@@ -134,10 +136,10 @@ export default function BookingsScreen() {
       <Modal visible={!!toCancel} transparent animationType="fade" onRequestClose={() => setToCancel(null)}>
         <Pressable style={styles.backdrop} onPress={() => setToCancel(null)}>
           <Pressable style={[styles.sheet, { paddingBottom: insets.bottom + 24 }]} onPress={() => {}}>
-            <Text style={styles.sheetTitle}>Annullare la prenotazione?</Text>
+            <Text style={styles.sheetTitle}>{t("cancel_q")}</Text>
             <Text style={styles.muted}>{toCancel?.bike_name} · {toCancel ? fmtRange(toCancel) : ""}</Text>
-            <Button testID="confirm-cancel-button" title="Sì, annulla" variant="danger" loading={cancel.isPending} onPress={() => toCancel && cancel.mutate(toCancel.id)} />
-            <Button testID="dismiss-cancel-button" title="No, mantieni" variant="ghost" onPress={() => setToCancel(null)} />
+            <Button testID="confirm-cancel-button" title={t("yes_cancel")} variant="danger" loading={cancel.isPending} onPress={() => toCancel && cancel.mutate(toCancel.id)} />
+            <Button testID="dismiss-cancel-button" title={t("no_keep")} variant="ghost" onPress={() => setToCancel(null)} />
           </Pressable>
         </Pressable>
       </Modal>

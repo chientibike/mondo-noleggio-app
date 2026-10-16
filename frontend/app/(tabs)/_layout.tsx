@@ -5,25 +5,27 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 
 import { usesNativeTabs } from "@/src/navigation";
+import { useI18n } from "@/src/i18n";
 import { useTheme } from "@/src/theme";
 
 export default function TabsLayout() {
   const { colors } = useTheme();
+  const { t } = useI18n();
 
   if (usesNativeTabs) {
     return (
       <NativeTabs tintColor={colors.brandPrimary}>
         <NativeTabs.Trigger name="index">
           <NativeTabs.Trigger.Icon sf="bicycle" />
-          <NativeTabs.Trigger.Label>Bici</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t("tab_bikes")}</NativeTabs.Trigger.Label>
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="bookings">
           <NativeTabs.Trigger.Icon sf="calendar" />
-          <NativeTabs.Trigger.Label>Prenotazioni</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t("tab_bookings")}</NativeTabs.Trigger.Label>
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="profile">
           <NativeTabs.Trigger.Icon sf="person.crop.circle" />
-          <NativeTabs.Trigger.Label>Profilo</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t("tab_profile")}</NativeTabs.Trigger.Label>
         </NativeTabs.Trigger>
       </NativeTabs>
     );
@@ -48,7 +50,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Bici",
+          title: t("tab_bikes"),
           tabBarButtonTestID: "tab-bikes",
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons name={focused ? "bicycle" : "bicycle-outline"} color={color} size={size} />
@@ -58,7 +60,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="bookings"
         options={{
-          title: "Prenotazioni",
+          title: t("tab_bookings"),
           tabBarButtonTestID: "tab-bookings",
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons name={focused ? "calendar" : "calendar-outline"} color={color} size={size} />
@@ -68,7 +70,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profilo",
+          title: t("tab_profile"),
           tabBarButtonTestID: "tab-profile",
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons name={focused ? "person-circle" : "person-circle-outline"} color={color} size={size} />

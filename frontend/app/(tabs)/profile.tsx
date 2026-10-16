@@ -5,7 +5,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 
 import { useAuth } from "@/src/auth";
-import { Button } from "@/src/components/ui";
+import { Button, Chip } from "@/src/components/ui";
+import { useI18n } from "@/src/i18n";
 import { SIZES, SIZE_HEIGHTS, OPEN_HOUR, CLOSE_HOUR } from "@/src/format";
 import { usesNativeTabs } from "@/src/navigation";
 import { useToast } from "@/src/toast";
@@ -18,12 +19,13 @@ export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const toast = useToast();
+  const { t, lang, setLang } = useI18n();
   const bottomChrome = usesNativeTabs ? insets.bottom : 0;
 
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Text style={styles.title}>Profilo</Text>
+        <Text style={styles.title}>{t("profile")}</Text>
       </View>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomChrome + 24 }]}>
         {user ? (
@@ -38,15 +40,15 @@ export default function ProfileScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.name} testID="profile-name">{user.name}</Text>
               <Text style={styles.muted} testID="profile-email">{user.email}</Text>
-              {user.role === "admin" && <Text style={styles.adminTag}>Amministratore</Text>}
+              {user.role === "admin" && <Text style={styles.adminTag}>{t("admin_role")}</Text>}
             </View>
           </View>
         ) : (
           <View style={styles.card}>
             <Ionicons name="person-circle-outline" size={48} color={colors.muted} />
             <View style={{ flex: 1, gap: 8 }}>
-              <Text style={styles.name}>{"Non hai effettuato l'accesso"}</Text>
-              <Button testID="profile-login-button" title="Accedi o registrati" onPress={() => router.push("/login")} />
+              <Text style={styles.name}>{t("not_logged")}</Text>
+              <Button testID="profile-login-button" title={t("login_or_register")} onPress={() => router.push("/login")} />
             </View>
           </View>
         )}
@@ -54,38 +56,44 @@ export default function ProfileScreen() {
         {user?.role === "admin" && (
           <Pressable testID="admin-area-button" style={styles.row} onPress={() => router.push("/admin")}>
             <Ionicons name="construct-outline" size={22} color={colors.brandPrimary} />
-            <Text style={styles.rowText}>Area amministratore</Text>
+            <Text style={styles.rowText}>{t("admin_area")}</Text>
             <Ionicons name="chevron-forward" size={20} color={colors.muted} />
           </Pressable>
         )}
 
-        <Text style={styles.section}>Guida alle taglie</Text>
+        <Text style={styles.section}>{t("language")}</Text>
+        <View style={[styles.box, styles.langRow]}>
+          <Chip testID="language-it" label="Italiano" selected={lang === "it"} onPress={() => setLang("it")} />
+          <Chip testID="language-en" label="English" selected={lang === "en"} onPress={() => setLang("en")} />
+        </View>
+
+        <Text style={styles.section}>{t("size_guide")}</Text>
         <View style={styles.box}>
           {SIZES.map((s) => (
             <View key={s} style={styles.sizeRow}>
               <View style={styles.sizePill}><Text style={styles.sizePillText}>{s}</Text></View>
-              <Text style={styles.rowText}>Altezza {SIZE_HEIGHTS[s]}</Text>
+              <Text style={styles.rowText}>{t("height", { h: SIZE_HEIGHTS[s] })}</Text>
             </View>
           ))}
         </View>
 
-        <Text style={styles.section}>Orari negozio</Text>
+        <Text style={styles.section}>{t("shop_hours")}</Text>
         <View style={styles.box}>
           <View style={styles.sizeRow}>
             <Ionicons name="time-outline" size={20} color={colors.brandPrimary} />
-            <Text style={styles.rowText}>Tutti i giorni {OPEN_HOUR}:00 – {CLOSE_HOUR}:00</Text>
+            <Text style={styles.rowText}>{t("every_day", { o: OPEN_HOUR, c: CLOSE_HOUR })}</Text>
           </View>
         </View>
 
         {user && (
           <Button
             testID="logout-button"
-            title="Esci"
+            title={t("logout")}
             variant="ghost"
             icon="log-out-outline"
             onPress={async () => {
               await logout();
-              toast("Sei uscito dal tuo account", "info");
+              toast(t("logged_out"), "info");
             }}
             style={{ marginTop: 8 }}
           />
@@ -111,6 +119,7 @@ const useStyles = makeStyles((c) => ({
   rowText: { flex: 1, fontSize: 15, color: c.onSurface, fontWeight: "500" },
   section: { fontSize: 13, fontWeight: "700", color: c.muted, textTransform: "uppercase", letterSpacing: 1, marginTop: 12, marginLeft: 4 },
   box: { backgroundColor: c.surface, borderRadius: 16, padding: 16, gap: 12 },
+  langRow: { flexDirection: "row", gap: 8 },
   sizeRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   sizePill: { width: 36, height: 28, borderRadius: 6, backgroundColor: c.brandTertiary, alignItems: "center", justifyContent: "center" },
   sizePillText: { fontWeight: "800", color: c.onBrandTertiary },

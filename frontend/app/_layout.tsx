@@ -8,6 +8,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ErrorBoundary } from "@/src/components/error-boundary";
 import { queryClient } from "@/src/query-client";
 import { AuthProvider } from "@/src/auth";
+import { I18nProvider } from "@/src/i18n";
 import { ToastProvider } from "@/src/toast";
 import { useTheme } from "@/src/theme";
 
@@ -22,15 +23,17 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <KeyboardProvider>
-            <AuthProvider>
-              <ToastProvider>
-                <StatusBar style="dark" />
-                <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surface } }}>
-                  <Stack.Screen name="(tabs)" />
-                  <Stack.Screen name="login" options={{ presentation: "modal" }} />
-                </Stack>
-              </ToastProvider>
-            </AuthProvider>
+            <I18nProvider>
+              <AuthProvider>
+                <ToastProvider>
+                  <StatusBar style="dark" />
+                  <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surface } }}>
+                    <Stack.Screen name="(tabs)" />
+                    <Stack.Screen name="login" options={{ presentation: "modal" }} />
+                  </Stack>
+                </ToastProvider>
+              </AuthProvider>
+            </I18nProvider>
           </KeyboardProvider>
         </QueryClientProvider>
       </ErrorBoundary>

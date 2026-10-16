@@ -11,11 +11,12 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { api, type Bike, type Quote, type Size } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Button, Chip } from "@/src/components/ui";
-import { CATEGORY_LABELS, CLOSE_HOUR, OPEN_HOUR, SIZES, SIZE_HEIGHTS, euro, nextDays } from "@/src/format";
+import { CATEGORY_LABELS, CLOSE_HOUR, OPEN_HOUR, SIZES, SIZE_HEIGHTS, SPEC_KEYS, euro, fmtUnits, nextDays, specValue } from "@/src/format";
+import { useI18n } from "@/src/i18n";
 import { makeStyles, useTheme } from "@/src/theme";
 
-const HOURS_OPTS = [1, 2, 3, 4, 6, 8];
 const DAYS_OPTS = [1, 2, 3, 4, 5, 7];
+const mode = "daily" as const;
 
 export default function BikeDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -24,50 +25,21 @@ export default function BikeDetail() {
   const { colors } = useTheme();
   const router = useRouter();
   const { user } = useAuth();
+  const { t, lang } = useI18n();
 
-  const days = useMemo(() => nextDays(21), []);
-  const [mode, setMode] = useState<"hourly" | "daily">("hourly");
+  const days = useMemo(() => nextDays(21), [lang]); // eslint-disable-line react-hooks/exhaustive-deps
   const [date, setDate] = useState(days[0].iso);
-  const [startHour, setStartHour] = useState(Math.max(OPEN_HOUR, Math.min(new Date().getHours() + 1, CLOSE_HOUR - 1)));
-  const [hours, setHours] = useState(2);
   const [nDays, setNDays] = useState(1);
   const [size, setSize] = useState<Size | null>(null);
 
-  const isToday = date === days[0].iso;
-  const nowHour = new Date().getHours();
-  const startHours = useMemo(() => {
-    const out: number[] = [];
-    for (let h = OPEN_HOUR; h < CLOSE_HOUR; h++) if (!isToday || h > nowHour) out.push(h);
-    return out;
-  }, [isToday, nowHour]);
-
-  useEffect(() => {
-    if (mode === "hourly" && startHours.length && !startHours.includes(startHour)) setStartHour(startHours[0]);
-  }, [startHours, startHour, mode]);
-
-  const maxHours = CLOSE_HOUR - startHour;
-  useEffect(() => {
-    if (hours > maxHours) setHours(Math.max(1, maxHours));
-  }, [maxHours, hours]);
-
   const bikeQ = useQuery({ queryKey: ["bike", id], queryFn: () => api<Bike>(`/bikes/${id}`) });
 
-  const selection = {
-    bike_id: id,
-    size: size ?? "M",
-    mode,
-    date,
-    start_hour: mode === "hourly" ? startHour : undefined,
-    hours: mode === "hourly" ? hours : undefined,
-    days: mode === "daily" ? nDays : undefined,
-    payment_method: "store",
-  };
-  const noSlotsToday = mode === "hourly" && startHours.length === 0;
+  const selection = { bike_id: id, size: size ?? "M", mode, date, days: nDays, payment_method: "store" };
 
   const quoteQ = useQuery({
-    queryKey: ["quote", id, mode, date, startHour, hours, nDays],
+    queryKey: ["quote", id, date, nDays],
     queryFn: () => api<Quote>(`/bikes/${id}/quote`, { method: "POST", body: selection }),
-    enabled: !!bikeQ.data && !noSlotsToday,
+    enabled: !!bikeQ.data,
   });
 
   const avail = quoteQ.data?.available;
@@ -81,7 +53,7 @@ export default function BikeDetail() {
   const goCheckout = () =>
     router.push({
       pathname: "/checkout",
-      params: { bike_id: id, size: size ?? "M", mode, date, start_hour: String(startHour), hours: String(hours), days: String(nDays) },
+      params: { bike_id: id, size: size ?? "M", date, days: String(nDays) },
     });
 
   // Continue the booking automatically after the user logs in from this screen.
@@ -104,8 +76,8 @@ export default function BikeDetail() {
   if (!bike) {
     return (
       <View style={[styles.root, styles.center, { padding: 24 }]}>
-        <Text style={styles.muted}>Bici non trovata</Text>
-        <Button testID="bike-back-button" title="Torna indietro" variant="secondary" onPress={() => router.back()} />
+        <Text style={styles.muted}>{t("bike_not_found")}</Text>
+        <Button testID="bike-back-button" title={t("go_back")} variant="secondary" onPress={() => router.back()} />
       </View>
     );
   }
@@ -132,28 +104,29 @@ export default function BikeDetail() {
           <View style={styles.heroText}>
             <Text style={styles.heroCat}>{CATEGORY_LABELS[bike.category]}</Text>
             <Text style={styles.heroName} testID="bike-detail-name">{bike.name}</Text>
-            <Text style={styles.heroPrice}>{euro(bike.price_hour)}/ora · {euro(bike.price_day)}/giorno</Text>
+            <Text style={styles.heroPrice}>{euro(bike.price_day)}{t("per_day")}</Text>
           </View>
         </View>
 
         <View style={styles.body}>
-          {!!bike.description && <Text style={styles.desc}>{bike.description}</Text>}
+          {!!(lang === "en" && bike.description_en ? bike.description_en : bike.description) && (
+            <Text style={styles.desc} testID="bike-description">{lang === "en" && bike.description_en ? bike.description_en : bike.description}</Text>
+          )}
+          {SPEC_KEYS.some((k) => bike.specs?.[k]) && (
+            <>
+              <Text style={styles.section}>{t("specs")}</Text>
+              <View style={styles.specBox} testID="bike-specs">
+                {SPEC_KEYS.filter((k) => bike.specs?.[k]).map((k, i) => (
+                  <View key={k} style={[styles.specRow, i > 0 && styles.specDivider]}>
+                    <Text style={styles.specLabel}>{t(`spec_${k}`)}</Text>
+                    <Text style={styles.specValue} testID={`bike-spec-${k}`}>{specValue(bike.specs![k])}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
 
-          <Text style={styles.section}>Tipo di noleggio</Text>
-          <View style={styles.segment}>
-            {(["hourly", "daily"] as const).map((m) => (
-              <Pressable
-                key={m}
-                testID={`mode-${m}`}
-                onPress={() => setMode(m)}
-                style={[styles.segBtn, mode === m && styles.segOn]}
-              >
-                <Text style={[styles.segText, mode === m && styles.segTextOn]}>{m === "hourly" ? "A ore" : "Giornata / più giorni"}</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <Text style={styles.section}>{mode === "hourly" ? "Giorno" : "Dal giorno"}</Text>
+          <Text style={styles.section}>{t("from_day")}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow} style={styles.hScroll}>
             {days.map((d) => (
               <Pressable key={d.iso} testID={`date-${d.iso}`} onPress={() => setDate(d.iso)} style={[styles.dateChip, date === d.iso && styles.dateOn]}>
@@ -164,39 +137,16 @@ export default function BikeDetail() {
             ))}
           </ScrollView>
 
-          {mode === "hourly" ? (
-            <>
-              <Text style={styles.section}>Ora di ritiro</Text>
-              {noSlotsToday ? (
-                <Text style={styles.muted}>Per oggi il negozio è chiuso, scegli un altro giorno.</Text>
-              ) : (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow} style={styles.hScroll}>
-                  {startHours.map((h) => (
-                    <Chip key={h} testID={`start-hour-${h}`} label={`${h}:00`} selected={startHour === h} onPress={() => setStartHour(h)} />
-                  ))}
-                </ScrollView>
-              )}
-              <Text style={styles.section}>Durata</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow} style={styles.hScroll}>
-                {HOURS_OPTS.filter((h) => h <= maxHours).map((h) => (
-                  <Chip key={h} testID={`hours-${h}`} label={`${h} ${h === 1 ? "ora" : "ore"}`} selected={hours === h} onPress={() => setHours(h)} />
-                ))}
-              </ScrollView>
-            </>
-          ) : (
-            <>
-              <Text style={styles.section}>Numero di giorni</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow} style={styles.hScroll}>
-                {DAYS_OPTS.map((d) => (
-                  <Chip key={d} testID={`days-${d}`} label={`${d} ${d === 1 ? "giorno" : "giorni"}`} selected={nDays === d} onPress={() => setNDays(d)} />
-                ))}
-              </ScrollView>
-              <Text style={styles.hint}>{`Ritiro alle ${OPEN_HOUR}:00, riconsegna entro le ${CLOSE_HOUR}:00 dell'ultimo giorno.`}</Text>
-            </>
-          )}
+          <Text style={styles.section}>{t("num_days")}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow} style={styles.hScroll}>
+            {DAYS_OPTS.map((d) => (
+              <Chip key={d} testID={`days-${d}`} label={fmtUnits("daily", d)} selected={nDays === d} onPress={() => setNDays(d)} />
+            ))}
+          </ScrollView>
+          <Text style={styles.hint}>{t("daily_hint", { open: OPEN_HOUR, close: CLOSE_HOUR })}</Text>
 
           <View style={styles.sectionRow}>
-            <Text style={styles.section}>Taglia (in base alla tua altezza)</Text>
+            <Text style={styles.section}>{t("size_by_height")}</Text>
             {quoteQ.isFetching && <ActivityIndicator size="small" color={colors.brandPrimary} />}
           </View>
           <View style={styles.sizeGrid}>
@@ -214,7 +164,7 @@ export default function BikeDetail() {
                   <Text style={[styles.sizeBig, size === s && styles.dateTextOn, off && styles.offText]}>{s}</Text>
                   <Text style={[styles.sizeH, size === s && styles.dateTextOn]}>{SIZE_HEIGHTS[s]}</Text>
                   <Text style={[styles.sizeAvail, size === s && styles.dateTextOn, off && { color: colors.error }]} testID={`size-available-${s}`}>
-                    {off ? "Esaurita" : `${n} disponibil${n === 1 ? "e" : "i"}`}
+                    {off ? t("sold_out") : t(n === 1 ? "available_one" : "available_many", { n })}
                   </Text>
                 </Pressable>
               );
@@ -225,13 +175,13 @@ export default function BikeDetail() {
 
       <BlurView intensity={60} tint="light" style={[styles.ctaBar, { paddingBottom: insets.bottom + 16 }]}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.ctaLabel}>Totale</Text>
-          <Text style={styles.ctaTotal} testID="bike-quote-total">{quoteQ.data && !noSlotsToday ? euro(quoteQ.data.total) : "—"}</Text>
+          <Text style={styles.ctaLabel}>{t("total")}</Text>
+          <Text style={styles.ctaTotal} testID="bike-quote-total">{quoteQ.data ? euro(quoteQ.data.total) : "—"}</Text>
         </View>
         <Button
           testID="book-now-button"
-          title={size ? "Prenota ora" : "Scegli la taglia"}
-          disabled={!size || noSlotsToday || !quoteQ.data}
+          title={size ? t("book_now") : t("choose_size")}
+          disabled={!size || !quoteQ.data}
           onPress={book}
           style={{ flex: 1.3 }}
         />
@@ -255,6 +205,11 @@ const useStyles = makeStyles((c) => ({
   heroPrice: { color: c.onSurfaceInverse, fontSize: 15, fontWeight: "600", marginTop: 4, opacity: 0.9 },
   body: { padding: 24, paddingTop: 20 },
   desc: { fontSize: 15, lineHeight: 22, color: c.onSurfaceSecondary },
+  specBox: { backgroundColor: c.surfaceSecondary, borderRadius: 12, paddingHorizontal: 16 },
+  specRow: { flexDirection: "row", justifyContent: "space-between", gap: 12, paddingVertical: 12 },
+  specDivider: { borderTopWidth: 0.5, borderTopColor: c.divider },
+  specLabel: { fontSize: 14, color: c.muted, flexShrink: 0 },
+  specValue: { fontSize: 14, fontWeight: "600", color: c.onSurface, flexShrink: 1, textAlign: "right" },
   section: { fontSize: 13, fontWeight: "700", color: c.muted, textTransform: "uppercase", letterSpacing: 1, marginTop: 24, marginBottom: 10 },
   sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   hint: { fontSize: 13, color: c.muted, marginTop: 8 },

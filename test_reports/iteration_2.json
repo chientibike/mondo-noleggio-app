@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 2 - full regression of daily-only + i18n changes. Backend: 29/29 pytest tests PASSED. New model verified: GET /api/bikes returns exactly 3 seeded bikes (Bianchi Arcadex GRX gravel €40, Specialized Turbo Creo egravel €50, Orbea Wild H30 ebike_mtb €60), no price_hour field anywhere. POST /api/bikes/{id}/quote with mode omitted (defaults daily) returns start YYYY-MM-DDT09:00, end YYYY-MM-DDT19:00, total = price_day*days (verified 2 days gravel = 80.0). mode='hourly' is rejected 422 on both quote and booking endpoints. Accept-Language: en header translates HTTPException details: login wrong -> 'Wrong email or password', unauth /me -> 'Not authenticated', forbidden admin -> 'Administrators only'; without header Italian ('Email o password errati', 'Non autenticato', 'Solo amministratori'). Admin POST/PUT /api/admin/bikes with price_day only works for all three categories; old category 'ebike' is rejected 422. Admin bike CRUD + patch booking + Stripe checkout session + stock exhaustion 409 all still pass. Frontend (390x844): catalog shows chips Tutte/Gravel/E-gravel/E-bike MTB and cards show only '€ XX,XX /giorno' (no /ora anywhere). Bike detail has NO hourly mode/time selection — shows only 'DAL GIORNO' date chips and 'NUMERO DI GIORNI' chips (1..7). Total updates live: 2 giorni gravel = € 80,00; 3 giorni gravel = € 120,00. Profile shows LINGUA with chips Italiano/English (testIDs language-it / language-en). Switching to English translates tabs (Bikes/Bookings/Profile), catalog ('Choose your bike', '/day'), profile ('LANGUAGE','Log in or sign up','SIZE GUIDE','SHOP HOURS'); persists after reload; switch back to IT restores Italian copy. Admin area accessible for admin, 3 bikes listed with correct categories and €/giorno prices, stats widget OK (21 units/0 today/10 active/€75,00 revenue). Admin bike form (Nuova bici): single 'Prezzo €/giorno' field (no €/ora), category chips Gravel/E-gravel/E-bike MTB, and price auto-fills 40/50/60 when selecting each category for a new bike. Known pre-existing issues (iter 1): post-login redirect returns to bike detail instead of /checkout, RN Web shadow* and pointerEvents deprecation warnings — NOT re-opened here as they are out of scope for this iteration.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_backend.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py handles the migration from old categories (gravel/ebike/gravel_muscolare + price_hour) by wiping bikes and reseeding when old docs are detected (lines 528-533) — clean and idempotent.",
+    "BookingIn.mode is Literal['daily'] with default 'daily', correctly rejecting any 'hourly' payload at Pydantic layer (422).",
+    "i18n error translation uses a simple map plus two regex rules for size-not-available and opening-hours cases; translate_error pattern 'Orario disponibile ...' is kept but can no longer be produced after hourly removal — safe to leave as dead branch.",
+    "parse_range correctly ignores body.hours/start_hour (not present on model anymore) and always returns 09:00/19:00 window.",
+    "Frontend i18n: single-source Record<TKey,string> keeps IT/EN parity enforced by TypeScript. Language persisted via storage util; UI consumers use useI18n().t so re-renders occur on setLang.",
+    "Admin bike-form auto-fills price_day on category change for new bikes only (expected UX for existing bikes to preserve manual overrides)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_backend.py (rewritten for daily-only model + i18n error tests, 29 tests)"
+  ],
+  "success_rate": {"backend": "100% (29/29)", "frontend": "100% - all requested flows verified"},
+  "seed_data_creation": "Backend startup now wipes old-category bikes and seeds exactly 3 new bikes (gravel €40 / egravel €50 / ebike_mtb €60). Tests create TEST_* ephemeral users and TEST_Bike_* admin bikes which are deleted within the same test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend URL env var is EXPO_PUBLIC_BACKEND_URL. Admin creds in /app/memory/test_credentials.md. Use /app/backend/tests/test_backend.py as regression (29 tests, run via `pytest tests/test_backend.py` from /app/backend). Mobile viewport 390x844. All critical testIDs exist: bike-card-*, days-{1..7}, date-{iso}, size-option-*, book-now-button, bike-quote-total, language-it, language-en, tab-bikes/bookings/profile, login-email-input, login-password-input, login-submit-button, bike-form-category-{gravel|egravel|ebike_mtb}, bike-form-price-day. BookingIn.mode defaults to 'daily' and only 'daily' is accepted."
+}

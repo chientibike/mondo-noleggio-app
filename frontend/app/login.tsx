@@ -9,6 +9,7 @@ import { useAuth } from "@/src/auth";
 import { Button } from "@/src/components/ui";
 import { useToast } from "@/src/toast";
 import { makeStyles, useTheme } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
 
 export default function Login() {
   const insets = useSafeAreaInsets();
@@ -17,6 +18,7 @@ export default function Login() {
   const router = useRouter();
   const toast = useToast();
   const { user, login, register, loginWithGoogle } = useAuth();
+  const { t } = useI18n();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -36,14 +38,14 @@ export default function Login() {
   const submit = async () => {
     setError(null);
     if (!email.trim() || !password || (mode === "register" && !name.trim())) {
-      setError("Compila tutti i campi");
+      setError(t("fill_all"));
       return;
     }
     setBusy(true);
     try {
       if (mode === "login") await login(email, password);
       else await register(name, email, password);
-      toast(mode === "login" ? "Bentornato!" : "Account creato!", "success");
+      toast(mode === "login" ? t("welcome_back") : t("account_created"), "success");
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -76,25 +78,25 @@ export default function Login() {
         <View style={styles.logo}>
           <Ionicons name="bicycle" size={36} color={colors.onBrandPrimary} />
         </View>
-        <Text style={styles.title}>{mode === "login" ? "Accedi" : "Crea un account"}</Text>
-        <Text style={styles.sub}>Prenota la tua bici da Noleggio Nuovo in pochi secondi.</Text>
+        <Text style={styles.title}>{mode === "login" ? t("login") : t("register_title")}</Text>
+        <Text style={styles.sub}>{t("login_sub")}</Text>
 
-        <Button testID="google-login-button" title="Continua con Google" icon="logo-google" variant="ghost" loading={gBusy} onPress={google} />
+        <Button testID="google-login-button" title={t("google")} icon="logo-google" variant="ghost" loading={gBusy} onPress={google} />
 
         <View style={styles.orRow}>
           <View style={styles.line} />
-          <Text style={styles.or}>oppure</Text>
+          <Text style={styles.or}>{t("or")}</Text>
           <View style={styles.line} />
         </View>
 
         {mode === "register" && (
           <View style={styles.field}>
-            <Text style={styles.label}>Nome</Text>
+            <Text style={styles.label}>{t("name")}</Text>
             <TextInput testID="register-name-input" style={styles.input} value={name} onChangeText={setName} placeholder="Mario Rossi" placeholderTextColor={colors.muted} />
           </View>
         )}
         <View style={styles.field}>
-          <Text style={styles.label}>Email</Text>
+          <Text style={styles.label}>{t("email")}</Text>
           <TextInput
             testID="login-email-input"
             style={styles.input}
@@ -108,14 +110,14 @@ export default function Login() {
           />
         </View>
         <View style={styles.field}>
-          <Text style={styles.label}>Password</Text>
+          <Text style={styles.label}>{t("password")}</Text>
           <TextInput
             testID="login-password-input"
             style={styles.input}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
-            placeholder={mode === "register" ? "Almeno 6 caratteri" : "La tua password"}
+            placeholder={mode === "register" ? t("pw_ph_register") : t("pw_ph_login")}
             placeholderTextColor={colors.muted}
             onSubmitEditing={submit}
           />
@@ -123,12 +125,12 @@ export default function Login() {
 
         {error && <Text style={styles.error} testID="login-error">{error}</Text>}
 
-        <Button testID="login-submit-button" title={mode === "login" ? "Accedi" : "Registrati"} loading={busy} onPress={submit} />
+        <Button testID="login-submit-button" title={mode === "login" ? t("login") : t("register")} loading={busy} onPress={submit} />
 
         <Pressable testID="toggle-auth-mode" onPress={() => { setMode(mode === "login" ? "register" : "login"); setError(null); }} style={styles.toggle}>
           <Text style={styles.toggleText}>
-            {mode === "login" ? "Non hai un account? " : "Hai già un account? "}
-            <Text style={styles.toggleLink}>{mode === "login" ? "Registrati" : "Accedi"}</Text>
+            {mode === "login" ? t("no_account") : t("have_account")}
+            <Text style={styles.toggleLink}>{mode === "login" ? t("register") : t("login")}</Text>
           </Text>
         </Pressable>
       </KeyboardAwareScrollView>

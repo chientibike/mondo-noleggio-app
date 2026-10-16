@@ -12,6 +12,7 @@ import { Button } from "@/src/components/ui";
 import { startStripePayment } from "@/src/payments";
 import { useToast } from "@/src/toast";
 import { makeStyles, useTheme } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
 
 type State = "checking" | "paid" | "store" | "cancelled" | "pending" | "error";
 
@@ -24,6 +25,7 @@ export default function PaymentResult() {
   const toast = useToast();
   const qc = useQueryClient();
   const { loading, user } = useAuth();
+  const { t } = useI18n();
   const [state, setState] = useState<State>(p.store ? "store" : p.cancelled ? "cancelled" : "checking");
   const [retrying, setRetrying] = useState(false);
 
@@ -72,12 +74,12 @@ export default function PaymentResult() {
   };
 
   const content: Record<State, { icon: any; color: string; title: string; sub: string }> = {
-    checking: { icon: null, color: colors.brandPrimary, title: "Verifica del pagamento...", sub: "Attendi qualche secondo" },
-    paid: { icon: "checkmark-circle", color: colors.success, title: "Prenotazione confermata!", sub: "Pagamento ricevuto. Ti aspettiamo in negozio per il ritiro." },
-    store: { icon: "storefront", color: colors.brandPrimary, title: "Prenotazione confermata!", sub: "Pagherai direttamente in negozio al ritiro della bici." },
-    cancelled: { icon: "close-circle", color: colors.error, title: "Pagamento annullato", sub: "La bici resta prenotata in attesa del pagamento. Puoi riprovare quando vuoi." },
-    pending: { icon: "time", color: colors.warning, title: "Pagamento in elaborazione", sub: "Controlla lo stato nelle tue prenotazioni tra qualche istante." },
-    error: { icon: "alert-circle", color: colors.error, title: "Qualcosa è andato storto", sub: "Controlla lo stato nelle tue prenotazioni." },
+    checking: { icon: null, color: colors.brandPrimary, title: t("pr_checking"), sub: t("pr_checking_sub") },
+    paid: { icon: "checkmark-circle", color: colors.success, title: t("pr_confirmed"), sub: t("pr_paid_sub") },
+    store: { icon: "storefront", color: colors.brandPrimary, title: t("pr_confirmed"), sub: t("pr_store_sub") },
+    cancelled: { icon: "close-circle", color: colors.error, title: t("pr_cancelled"), sub: t("pr_cancelled_sub") },
+    pending: { icon: "time", color: colors.warning, title: t("pr_pending"), sub: t("pr_pending_sub") },
+    error: { icon: "alert-circle", color: colors.error, title: t("pr_error"), sub: t("pr_error_sub") },
   };
   const c = content[state];
 
@@ -96,10 +98,10 @@ export default function PaymentResult() {
       </View>
       <View style={styles.actions}>
         {(state === "cancelled" || state === "error") && p.booking_id && (
-          <Button testID="payment-retry-button" title="Riprova pagamento" icon="card-outline" loading={retrying} onPress={retry} />
+          <Button testID="payment-retry-button" title={t("retry_payment")} icon="card-outline" loading={retrying} onPress={retry} />
         )}
-        <Button testID="go-bookings-button" title="Vai alle prenotazioni" variant={state === "cancelled" ? "ghost" : "primary"} onPress={() => router.replace("/bookings")} />
-        <Button testID="go-home-button" title="Torna alle bici" variant="ghost" onPress={() => router.replace("/")} />
+        <Button testID="go-bookings-button" title={t("go_bookings")} variant={state === "cancelled" ? "ghost" : "primary"} onPress={() => router.replace("/bookings")} />
+        <Button testID="go-home-button" title={t("back_to_bikes")} variant="ghost" onPress={() => router.replace("/")} />
       </View>
     </View>
   );

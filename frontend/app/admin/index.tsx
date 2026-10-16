@@ -12,14 +12,15 @@ import { Badge, Button, Chip } from "@/src/components/ui";
 import { CATEGORY_LABELS, PAYMENT_LABELS, SIZES, STATUS_LABELS, euro, fmtRange, statusTone } from "@/src/format";
 import { useToast } from "@/src/toast";
 import { makeStyles, useTheme } from "@/src/theme";
+import { useI18n, type TKey } from "@/src/i18n";
 
 type Stats = { bike_models: number; total_units: number; active_bookings: number; today_bookings: number; revenue_paid: number };
-const FILTERS: { key: string; label: string }[] = [
-  { key: "all", label: "Tutte" },
-  { key: "confirmed", label: "Confermate" },
-  { key: "pending_payment", label: "Da pagare" },
-  { key: "completed", label: "Completate" },
-  { key: "cancelled", label: "Annullate" },
+const FILTERS: { key: string; label: TKey }[] = [
+  { key: "all", label: "f_all" },
+  { key: "confirmed", label: "f_confirmed" },
+  { key: "pending_payment", label: "f_pending_payment" },
+  { key: "completed", label: "f_completed" },
+  { key: "cancelled", label: "f_cancelled" },
 ];
 
 export default function Admin() {
@@ -30,6 +31,7 @@ export default function Admin() {
   const toast = useToast();
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { t } = useI18n();
   const [tab, setTab] = useState<"bikes" | "bookings">("bikes");
   const [filter, setFilter] = useState("all");
   const [toDelete, setToDelete] = useState<Bike | null>(null);
@@ -52,7 +54,7 @@ export default function Admin() {
   const patch = useMutation({
     mutationFn: ({ id, body }: { id: string; body: any }) => api(`/admin/bookings/${id}`, { method: "PATCH", body }),
     onSuccess: () => {
-      toast("Prenotazione aggiornata", "success");
+      toast(t("booking_updated"), "success");
       refreshAll();
     },
     onError: (e: any) => toast(e.message, "error"),
@@ -61,7 +63,7 @@ export default function Admin() {
   const del = useMutation({
     mutationFn: (id: string) => api(`/admin/bikes/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      toast("Bici eliminata", "success");
+      toast(t("bike_deleted"), "success");
       refreshAll();
     },
     onError: (e: any) => toast(e.message, "error"),
@@ -72,8 +74,8 @@ export default function Admin() {
     return (
       <View style={[styles.root, styles.center, { paddingTop: insets.top }]}>
         <Ionicons name="lock-closed-outline" size={44} color={colors.muted} />
-        <Text style={styles.muted}>Accesso riservato agli amministratori</Text>
-        <Button testID="admin-back-home" title="Torna indietro" variant="secondary" onPress={() => router.back()} />
+        <Text style={styles.muted}>{t("admin_only")}</Text>
+        <Button testID="admin-back-home" title={t("go_back")} variant="secondary" onPress={() => router.back()} />
       </View>
     );
   }
@@ -87,25 +89,25 @@ export default function Admin() {
           <Pressable testID="admin-back" onPress={() => router.back()} style={styles.back}>
             <Ionicons name="chevron-back" size={24} color={colors.onSurface} />
           </Pressable>
-          <Text style={styles.title}>Gestione negozio</Text>
+          <Text style={styles.title}>{t("shop_mgmt")}</Text>
         </View>
         <View style={styles.statsRow}>
-          <Stat label="Bici in flotta" value={s ? String(s.total_units) : "—"} testID="stat-units" />
-          <Stat label="Oggi" value={s ? String(s.today_bookings) : "—"} testID="stat-today" />
-          <Stat label="Attive" value={s ? String(s.active_bookings) : "—"} testID="stat-active" />
-          <Stat label="Incassato" value={s ? euro(s.revenue_paid) : "—"} testID="stat-revenue" />
+          <Stat label={t("stat_fleet")} value={s ? String(s.total_units) : "—"} testID="stat-units" />
+          <Stat label={t("stat_today")} value={s ? String(s.today_bookings) : "—"} testID="stat-today" />
+          <Stat label={t("stat_active")} value={s ? String(s.active_bookings) : "—"} testID="stat-active" />
+          <Stat label={t("stat_revenue")} value={s ? euro(s.revenue_paid) : "—"} testID="stat-revenue" />
         </View>
         <View style={styles.segment}>
-          {(["bikes", "bookings"] as const).map((t) => (
-            <Pressable key={t} testID={`admin-tab-${t}`} onPress={() => setTab(t)} style={[styles.segBtn, tab === t && styles.segOn]}>
-              <Text style={[styles.segText, tab === t && styles.segTextOn]}>{t === "bikes" ? "Bici" : "Prenotazioni"}</Text>
+          {(["bikes", "bookings"] as const).map((k) => (
+            <Pressable key={k} testID={`admin-tab-${k}`} onPress={() => setTab(k)} style={[styles.segBtn, tab === k && styles.segOn]}>
+              <Text style={[styles.segText, tab === k && styles.segTextOn]}>{t(k)}</Text>
             </Pressable>
           ))}
         </View>
         {tab === "bookings" && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow} contentContainerStyle={styles.chipRowContent}>
             {FILTERS.map((f) => (
-              <Chip key={f.key} testID={`admin-filter-${f.key}`} label={f.label} selected={filter === f.key} onPress={() => setFilter(f.key)} />
+              <Chip key={f.key} testID={`admin-filter-${f.key}`} label={t(f.label)} selected={filter === f.key} onPress={() => setFilter(f.key)} />
             ))}
           </ScrollView>
         )}
@@ -118,14 +120,14 @@ export default function Admin() {
           keyExtractor={(b) => b.id}
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 96 }]}
           refreshControl={<RefreshControl refreshing={bikes.isRefetching} onRefresh={refreshAll} tintColor={colors.brandPrimary} />}
-          ListEmptyComponent={bikes.isLoading ? <ActivityIndicator color={colors.brandPrimary} /> : <Text style={styles.muted}>Nessuna bici. Aggiungine una.</Text>}
+          ListEmptyComponent={bikes.isLoading ? <ActivityIndicator color={colors.brandPrimary} /> : <Text style={styles.muted}>{t("no_bikes_admin")}</Text>}
           renderItem={({ item }) => (
             <View style={styles.card} testID={`admin-bike-${item.id}`}>
               <View style={styles.cardTop}>
                 <Image source={{ uri: item.image_url }} style={styles.thumb} contentFit="cover" />
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.meta}>{CATEGORY_LABELS[item.category]} · {euro(item.price_hour)}/h · {euro(item.price_day)}/g</Text>
+                  <Text style={styles.meta}>{CATEGORY_LABELS[item.category]} · {euro(item.price_day)}{t("per_day")}</Text>
                   <View style={styles.stockRow}>
                     {SIZES.map((sz) => (
                       <Text key={sz} style={styles.stock}>{sz}: <Text style={styles.stockN}>{item.stock[sz] ?? 0}</Text></Text>
@@ -134,8 +136,8 @@ export default function Admin() {
                 </View>
               </View>
               <View style={styles.actions}>
-                <Button testID={`admin-edit-bike-${item.id}`} title="Modifica" icon="create-outline" variant="secondary" onPress={() => router.push({ pathname: "/admin/bike-form", params: { id: item.id } })} style={{ flex: 1 }} />
-                <Button testID={`admin-delete-bike-${item.id}`} title="Elimina" icon="trash-outline" variant="ghost" onPress={() => setToDelete(item)} style={{ flex: 1 }} />
+                <Button testID={`admin-edit-bike-${item.id}`} title={t("edit")} icon="create-outline" variant="secondary" onPress={() => router.push({ pathname: "/admin/bike-form", params: { id: item.id } })} style={{ flex: 1 }} />
+                <Button testID={`admin-delete-bike-${item.id}`} title={t("delete")} icon="trash-outline" variant="ghost" onPress={() => setToDelete(item)} style={{ flex: 1 }} />
               </View>
             </View>
           )}
@@ -147,7 +149,7 @@ export default function Admin() {
           keyExtractor={(b) => b.id}
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 24 }]}
           refreshControl={<RefreshControl refreshing={bookings.isRefetching} onRefresh={refreshAll} tintColor={colors.brandPrimary} />}
-          ListEmptyComponent={bookings.isLoading ? <ActivityIndicator color={colors.brandPrimary} /> : <Text style={styles.muted}>Nessuna prenotazione</Text>}
+          ListEmptyComponent={bookings.isLoading ? <ActivityIndicator color={colors.brandPrimary} /> : <Text style={styles.muted}>{t("no_bookings")}</Text>}
           renderItem={({ item }) => (
             <View style={styles.card} testID={`admin-booking-${item.id}`}>
               <View style={styles.rowBetween}>
@@ -163,10 +165,10 @@ export default function Admin() {
               {item.status !== "cancelled" && item.status !== "completed" && (
                 <View style={styles.actions}>
                   {item.payment_status !== "paid" && (
-                    <Button testID={`admin-mark-paid-${item.id}`} title="Segna pagata" variant="secondary" onPress={() => patch.mutate({ id: item.id, body: { payment_status: "paid", status: "confirmed" } })} style={{ flex: 1 }} />
+                    <Button testID={`admin-mark-paid-${item.id}`} title={t("mark_paid")} variant="secondary" onPress={() => patch.mutate({ id: item.id, body: { payment_status: "paid", status: "confirmed" } })} style={{ flex: 1 }} />
                   )}
-                  <Button testID={`admin-complete-${item.id}`} title="Riconsegnata" variant="secondary" onPress={() => patch.mutate({ id: item.id, body: { status: "completed" } })} style={{ flex: 1 }} />
-                  <Button testID={`admin-cancel-${item.id}`} title="Annulla" variant="ghost" onPress={() => patch.mutate({ id: item.id, body: { status: "cancelled" } })} style={{ flex: 1 }} />
+                  <Button testID={`admin-complete-${item.id}`} title={t("returned")} variant="secondary" onPress={() => patch.mutate({ id: item.id, body: { status: "completed" } })} style={{ flex: 1 }} />
+                  <Button testID={`admin-cancel-${item.id}`} title={t("cancel")} variant="ghost" onPress={() => patch.mutate({ id: item.id, body: { status: "cancelled" } })} style={{ flex: 1 }} />
                 </View>
               )}
             </View>
@@ -177,17 +179,17 @@ export default function Admin() {
       {tab === "bikes" && (
         <Pressable testID="admin-add-bike-fab" onPress={() => router.push("/admin/bike-form")} style={[styles.fab, { bottom: insets.bottom + 16 }]}>
           <Ionicons name="add" size={24} color={colors.onBrandPrimary} />
-          <Text style={styles.fabText}>Aggiungi bici</Text>
+          <Text style={styles.fabText}>{t("add_bike")}</Text>
         </Pressable>
       )}
 
       <Modal visible={!!toDelete} transparent animationType="fade" onRequestClose={() => setToDelete(null)}>
         <Pressable style={styles.backdrop} onPress={() => setToDelete(null)}>
           <Pressable style={[styles.sheet, { paddingBottom: insets.bottom + 24 }]} onPress={() => {}}>
-            <Text style={styles.sheetTitle}>Eliminare {toDelete?.name}?</Text>
-            <Text style={styles.muted}>Le prenotazioni esistenti resteranno nello storico.</Text>
-            <Button testID="confirm-delete-bike" title="Elimina" variant="danger" loading={del.isPending} onPress={() => toDelete && del.mutate(toDelete.id)} />
-            <Button testID="dismiss-delete-bike" title="Annulla" variant="ghost" onPress={() => setToDelete(null)} />
+            <Text style={styles.sheetTitle}>{t("delete_q", { name: toDelete?.name ?? "" })}</Text>
+            <Text style={styles.muted}>{t("delete_sub")}</Text>
+            <Button testID="confirm-delete-bike" title={t("delete")} variant="danger" loading={del.isPending} onPress={() => toDelete && del.mutate(toDelete.id)} />
+            <Button testID="dismiss-delete-bike" title={t("cancel")} variant="ghost" onPress={() => setToDelete(null)} />
           </Pressable>
         </Pressable>
       </Modal>

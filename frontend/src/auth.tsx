@@ -4,6 +4,7 @@ import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 
 import { api, loadToken, persistToken, setUnauthorizedHandler, type User } from "./api";
+import { tr } from "./i18n";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -124,7 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const url = (result.type === "success" ? result.url : null) ?? captured ?? (await Linking.getInitialURL());
       const sid = extractSessionId(url);
       if (sid) await exchange(sid);
-      else if (result.type !== "success") throw new Error("Accesso con Google annullato");
+      else if (result.type !== "success") throw new Error(tr("google_cancelled"));
     } finally {
       sub.remove();
     }

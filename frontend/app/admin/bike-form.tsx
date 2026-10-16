@@ -7,13 +7,14 @@ import { KeyboardAwareScrollView, KeyboardStickyView } from "react-native-keyboa
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 
-import { api, type Bike, type Category, type Size } from "@/src/api";
+import { api, CATEGORY_PRICES, type Bike, type Category, type Size } from "@/src/api";
 import { Button, Chip } from "@/src/components/ui";
-import { CATEGORY_LABELS, SIZES, SIZE_HEIGHTS } from "@/src/format";
+import { CATEGORY_LABELS, SIZES, SIZE_HEIGHTS, SPEC_KEYS } from "@/src/format";
 import { useToast } from "@/src/toast";
 import { makeStyles, useTheme } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
 
-const CATS: Category[] = ["gravel", "ebike", "gravel_muscolare"];
+const CATS: Category[] = ["gravel", "egravel", "ebike_mtb"];
 
 export default function BikeForm() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -23,13 +24,15 @@ export default function BikeForm() {
   const router = useRouter();
   const toast = useToast();
   const qc = useQueryClient();
+  const { t } = useI18n();
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState<Category>("gravel");
   const [description, setDescription] = useState("");
+  const [descriptionEn, setDescriptionEn] = useState("");
+  const [specs, setSpecs] = useState<Record<string, string>>({});
   const [imageUrl, setImageUrl] = useState("");
-  const [priceHour, setPriceHour] = useState("");
-  const [priceDay, setPriceDay] = useState("");
+  const [priceDay, setPriceDay] = useState(id ? "" : String(CATEGORY_PRICES.gravel));
   const [stock, setStock] = useState<Record<Size, number>>({ S: 0, M: 0, L: 0, XL: 0 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,28 +44,29 @@ export default function BikeForm() {
     setName(b.name);
     setCategory(b.category);
     setDescription(b.description);
+    setDescriptionEn(b.description_en ?? "");
+    setSpecs(b.specs ?? {});
     setImageUrl(b.image_url);
-    setPriceHour(String(b.price_hour));
     setPriceDay(String(b.price_day));
     setStock(b.stock);
   }, [existing.data]);
 
   const save = async () => {
     setError(null);
-    const ph = parseFloat(priceHour.replace(",", "."));
     const pd = parseFloat(priceDay.replace(",", "."));
-    if (!name.trim() || !(ph > 0) || !(pd > 0)) {
-      setError("Inserisci nome e prezzi validi");
+    if (!name.trim() || !(pd > 0)) {
+      setError(t("invalid_form"));
       return;
     }
     setBusy(true);
     try {
-      const body = { name: name.trim(), category, description, image_url: imageUrl.trim(), price_hour: ph, price_day: pd, stock };
+      const cleanSpecs = Object.fromEntries(Object.entries(specs).filter(([, v]) => v.trim()).map(([k, v]) => [k, v.trim()]));
+      const body = { name: name.trim(), category, description, description_en: descriptionEn, image_url: imageUrl.trim(), price_day: pd, stock, specs: cleanSpecs };
       await api(id ? `/admin/bikes/${id}` : "/admin/bikes", { method: id ? "PUT" : "POST", body });
       qc.invalidateQueries({ queryKey: ["bikes"] });
       qc.invalidateQueries({ queryKey: ["bike", id] });
       qc.invalidateQueries({ queryKey: ["admin-stats"] });
-      toast(id ? "Bici aggiornata" : "Bici aggiunta", "success");
+      toast(id ? t("bike_updated") : t("bike_added"), "success");
       router.back();
     } catch (e: any) {
       setError(e.message);
@@ -79,29 +83,33 @@ export default function BikeForm() {
         <Pressable testID="bike-form-back" onPress={() => router.back()} style={styles.back}>
           <Ionicons name="close" size={24} color={colors.onSurface} />
         </Pressable>
-        <Text style={styles.title}>{id ? "Modifica bici" : "Nuova bici"}</Text>
+        <Text style={styles.title}>{id ? t("edit_bike") : t("new_bike")}</Text>
       </View>
       <KeyboardAwareScrollView bottomOffset={100} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}>
         {!!imageUrl && <Image source={{ uri: imageUrl }} style={styles.preview} contentFit="cover" />}
-        <Field label="Nome">
-          <TextInput testID="bike-form-name" style={styles.input} value={name} onChangeText={setName} placeholder="Es. Bianchi Arcadex" placeholderTextColor={colors.muted} />
+        <Field label={t("name")}>
+          <TextInput testID="bike-form-name" style={styles.input} value={name} onChangeText={setName} placeholder={t("name_ph")} placeholderTextColor={colors.muted} />
         </Field>
-        <Field label="Categoria">
+        <Field label={t("category")}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
             {CATS.map((c) => (
-              <Chip key={c} testID={`bike-form-category-${c}`} label={CATEGORY_LABELS[c]} selected={category === c} onPress={() => setCategory(c)} />
+              <Chip
+                key={c}
+                testID={`bike-form-category-${c}`}
+                label={CATEGORY_LABELS[c]}
+                selected={category === c}
+                onPress={() => {
+                  setCategory(c);
+                  if (!id) setPriceDay(String(CATEGORY_PRICES[c]));
+                }}
+              />
             ))}
           </ScrollView>
         </Field>
-        <View style={styles.row2}>
-          <Field label="Prezzo €/ora" style={{ flex: 1 }}>
-            <TextInput testID="bike-form-price-hour" style={styles.input} value={priceHour} onChangeText={setPriceHour} keyboardType="decimal-pad" placeholder="8" placeholderTextColor={colors.muted} />
-          </Field>
-          <Field label="Prezzo €/giorno" style={{ flex: 1 }}>
-            <TextInput testID="bike-form-price-day" style={styles.input} value={priceDay} onChangeText={setPriceDay} keyboardType="decimal-pad" placeholder="35" placeholderTextColor={colors.muted} />
-          </Field>
-        </View>
-        <Field label="Quantità per taglia">
+        <Field label={t("price_day")}>
+          <TextInput testID="bike-form-price-day" style={styles.input} value={priceDay} onChangeText={setPriceDay} keyboardType="decimal-pad" placeholder="40" placeholderTextColor={colors.muted} />
+        </Field>
+        <Field label={t("qty_per_size")}>
           <View style={styles.box}>
             {SIZES.map((s) => (
               <View key={s} style={styles.stockRow}>
@@ -120,16 +128,35 @@ export default function BikeForm() {
             ))}
           </View>
         </Field>
-        <Field label="URL immagine">
+        <Field label={t("image_url")}>
           <TextInput testID="bike-form-image" style={styles.input} value={imageUrl} onChangeText={setImageUrl} autoCapitalize="none" placeholder="https://..." placeholderTextColor={colors.muted} />
         </Field>
-        <Field label="Descrizione">
-          <TextInput testID="bike-form-description" style={[styles.input, styles.multi]} value={description} onChangeText={setDescription} multiline placeholder="Caratteristiche, cambio, autonomia..." placeholderTextColor={colors.muted} />
+        <Field label={t("description")}>
+          <TextInput testID="bike-form-description" style={[styles.input, styles.multi]} value={description} onChangeText={setDescription} multiline placeholder={t("desc_ph")} placeholderTextColor={colors.muted} />
+        </Field>
+        <Field label={t("description_en")}>
+          <TextInput testID="bike-form-description-en" style={[styles.input, styles.multi]} value={descriptionEn} onChangeText={setDescriptionEn} multiline placeholderTextColor={colors.muted} />
+        </Field>
+        <Field label={t("specs")}>
+          <View style={styles.box}>
+            {SPEC_KEYS.map((k) => (
+              <View key={k} style={{ gap: 4 }}>
+                <Text style={styles.sizeH}>{t(`spec_${k}`)}</Text>
+                <TextInput
+                  testID={`bike-form-spec-${k}`}
+                  style={[styles.input, { backgroundColor: colors.surface }]}
+                  value={specs[k] ?? ""}
+                  onChangeText={(v) => setSpecs((p) => ({ ...p, [k]: v }))}
+                  placeholderTextColor={colors.muted}
+                />
+              </View>
+            ))}
+          </View>
         </Field>
         {error && <Text style={styles.error} testID="bike-form-error">{error}</Text>}
       </KeyboardAwareScrollView>
       <KeyboardStickyView offset={{ opened: insets.bottom }} style={[styles.ctaBar, { paddingBottom: insets.bottom + 16 }]}>
-        <Button testID="bike-form-save" title={id ? "Salva modifiche" : "Aggiungi bici"} loading={busy} onPress={save} />
+        <Button testID="bike-form-save" title={id ? t("save_changes") : t("add_bike")} loading={busy} onPress={save} />
       </KeyboardStickyView>
     </View>
   );

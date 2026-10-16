@@ -24,7 +24,15 @@ App scaricabile da tutti per gestire la giacenza di bici a noleggio (gravel, e-b
 - Ripresa automatica della prenotazione dopo login
 - Test backend 25/25 e flussi frontend superati
 
+## Aggiornamenti
+- App bilingue: italiano (predefinito) + inglese, selettore lingua nel Profilo, messaggi del server tradotti (Accept-Language)
+- Solo noleggio giornaliero / più giorni (ritiro 9:00, riconsegna 19:00); noleggio a ore rimosso
+- Categorie e prezzi: Gravel 40€, E-gravel 50€, E-bike MTB 60€ al giorno (prezzo auto nel form admin)
+- Ogni bici: foto coerente, caratteristiche (telaio, motore, batteria, autonomia, escursione, cambio, freni, ruote, peso) e descrizione IT/EN, modificabili dall'admin
+- Foglio Google "modulo noleggio": non leggibile dal server (risponde 401, accesso richiesto) → import in attesa
+
 ## Backlog
+- P0: Import/sync bici dal foglio Google "modulo noleggio" (serve accesso pubblico funzionante o file .csv/.xlsx)
 - P0: PayPal (in attesa credenziali sandbox)
 - P1: Upload foto bici (object storage) invece di URL; email di conferma prenotazione
 - P1: Calendario disponibilità per admin, blocco bici in manutenzione

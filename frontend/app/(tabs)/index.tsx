@@ -14,8 +14,9 @@ import { Button, Chip } from "@/src/components/ui";
 import { useAuth } from "@/src/auth";
 import { usesNativeTabs } from "@/src/navigation";
 import { makeStyles, useTheme } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
 
-const CATS: (Category | "all")[] = ["all", "gravel", "ebike", "gravel_muscolare"];
+const CATS: (Category | "all")[] = ["all", "gravel", "egravel", "ebike_mtb"];
 
 export default function CatalogScreen() {
   const insets = useSafeAreaInsets();
@@ -23,6 +24,7 @@ export default function CatalogScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const { user } = useAuth();
+  const { t } = useI18n();
   const [cat, setCat] = useState<Category | "all">("all");
   const [size, setSize] = useState<Size | null>(null);
   const bottomChrome = usesNativeTabs ? insets.bottom : 0;
@@ -43,7 +45,7 @@ export default function CatalogScreen() {
         <View style={styles.titleRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.kicker}>Noleggio Nuovo</Text>
-            <Text style={styles.title} testID="catalog-title">Scegli la tua bici</Text>
+            <Text style={styles.title} testID="catalog-title">{t("choose_bike")}</Text>
           </View>
           <Pressable testID="header-profile-button" onPress={() => router.push(user ? "/profile" : "/login")} style={styles.avatar}>
             {user?.picture ? (
@@ -63,7 +65,7 @@ export default function CatalogScreen() {
             <Chip
               key={c}
               testID={`category-chip-${c}`}
-              label={c === "all" ? "Tutte" : CATEGORY_LABELS[c]}
+              label={c === "all" ? t("all") : CATEGORY_LABELS[c]}
               selected={cat === c}
               onPress={() => setCat(c)}
             />
@@ -75,8 +77,8 @@ export default function CatalogScreen() {
           style={styles.chipRow}
           contentContainerStyle={styles.chipRowContent}
         >
-          <Text style={styles.sizeLabel}>Taglia</Text>
-          <Chip testID="size-filter-all" label="Tutte" selected={size === null} onPress={() => setSize(null)} />
+          <Text style={styles.sizeLabel}>{t("size")}</Text>
+          <Chip testID="size-filter-all" label={t("all")} selected={size === null} onPress={() => setSize(null)} />
           {SIZES.map((s) => (
             <Chip
               key={s}
@@ -92,13 +94,13 @@ export default function CatalogScreen() {
       {q.isLoading ? (
         <View style={styles.center} testID="catalog-loading">
           <ActivityIndicator color={colors.brandPrimary} />
-          <Text style={styles.muted}>Caricamento bici...</Text>
+          <Text style={styles.muted}>{t("loading_bikes")}</Text>
         </View>
       ) : q.isError ? (
         <View style={styles.center}>
           <Ionicons name="cloud-offline-outline" size={40} color={colors.muted} />
-          <Text style={styles.muted}>Impossibile caricare le bici</Text>
-          <Button testID="catalog-retry-button" title="Riprova" onPress={() => q.refetch()} variant="secondary" />
+          <Text style={styles.muted}>{t("load_error")}</Text>
+          <Button testID="catalog-retry-button" title={t("retry")} onPress={() => q.refetch()} variant="secondary" />
         </View>
       ) : (
         <FlatList
@@ -110,8 +112,8 @@ export default function CatalogScreen() {
           ListEmptyComponent={
             <View style={styles.center}>
               <Ionicons name="bicycle-outline" size={44} color={colors.muted} />
-              <Text style={styles.muted}>Nessuna bici trovata</Text>
-              <Button testID="catalog-empty-reload" title="Ricarica" variant="secondary" onPress={() => q.refetch()} />
+              <Text style={styles.muted}>{t("no_bikes")}</Text>
+              <Button testID="catalog-empty-reload" title={t("reload")} variant="secondary" onPress={() => q.refetch()} />
             </View>
           }
           renderItem={({ item, index }) => <BikeCard bike={item} index={index} onPress={() => router.push(`/bike/${item.id}`)} />}
@@ -124,6 +126,7 @@ export default function CatalogScreen() {
 function BikeCard({ bike, index, onPress }: { bike: Bike; index: number; onPress: () => void }) {
   const styles = useStyles();
   const { colors } = useTheme();
+  const { t } = useI18n();
   const total = SIZES.reduce((a, s) => a + (bike.stock[s] ?? 0), 0);
   return (
     <Animated.View entering={FadeInDown.delay(index * 60).springify()}>
@@ -146,11 +149,10 @@ function BikeCard({ bike, index, onPress }: { bike: Bike; index: number; onPress
                 </View>
               );
             })}
-            <Text style={styles.units}>{total} in flotta</Text>
+            <Text style={styles.units}>{t("in_fleet", { n: total })}</Text>
           </View>
           <View style={styles.prices}>
-            <Text style={styles.price} testID={`bike-price-hour-${bike.id}`}>{euro(bike.price_hour)}<Text style={styles.per}>/ora</Text></Text>
-            <Text style={styles.priceDay}>{euro(bike.price_day)}<Text style={styles.per}>/giorno</Text></Text>
+            <Text style={styles.price} testID={`bike-price-day-${bike.id}`}>{euro(bike.price_day)}<Text style={styles.per}>{t("per_day")}</Text></Text>
           </View>
         </View>
       </Pressable>

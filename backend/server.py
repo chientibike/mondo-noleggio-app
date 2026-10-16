@@ -1,5 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+import re
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -31,7 +33,8 @@ STRIPE_API_KEY = os.environ['STRIPE_API_KEY']
 
 SIZES = ["S", "M", "L", "XL"]
 SIZE_HEIGHTS = {"S": "155-165 cm", "M": "165-175 cm", "L": "175-185 cm", "XL": "185-195 cm"}
-CATEGORIES = ["gravel", "ebike", "gravel_muscolare"]
+CATEGORIES = ["gravel", "egravel", "ebike_mtb"]
+CATEGORY_PRICES = {"gravel": 40.0, "egravel": 50.0, "ebike_mtb": 60.0}
 OPEN_HOUR = 9
 CLOSE_HOUR = 19
 
@@ -83,22 +86,24 @@ class SessionIn(BaseModel):
 class Bike(BaseModel):
     id: str = Field(default_factory=new_id)
     name: str
-    category: Literal["gravel", "ebike", "gravel_muscolare"]
+    category: Literal["gravel", "egravel", "ebike_mtb"]
     description: str = ""
+    description_en: str = ""
     image_url: str = ""
-    price_hour: float
     price_day: float
+    specs: Dict[str, str] = Field(default_factory=dict)
     stock: Dict[str, int] = Field(default_factory=lambda: {s: 0 for s in SIZES})
     created_at: str = Field(default_factory=now_iso)
 
 
 class BikeIn(BaseModel):
     name: str = Field(min_length=1)
-    category: Literal["gravel", "ebike", "gravel_muscolare"]
+    category: Literal["gravel", "egravel", "ebike_mtb"]
     description: str = ""
+    description_en: str = ""
     image_url: str = ""
-    price_hour: float = Field(gt=0)
     price_day: float = Field(gt=0)
+    specs: Dict[str, str] = Field(default_factory=dict)
     stock: Dict[str, int]
 
 
@@ -126,10 +131,8 @@ class Booking(BaseModel):
 class BookingIn(BaseModel):
     bike_id: str
     size: Literal["S", "M", "L", "XL"]
-    mode: Literal["hourly", "daily"]
+    mode: Literal["daily"] = "daily"
     date: str  # YYYY-MM-DD
-    start_hour: Optional[int] = None
-    hours: Optional[int] = None
     days: Optional[int] = None
     payment_method: Literal["stripe", "store"]
 
@@ -244,14 +247,6 @@ def parse_range(body: BookingIn) -> tuple[str, str, int]:
         raise HTTPException(422, "Data non valida")
     if d < datetime.now().date():
         raise HTTPException(422, "Non puoi prenotare nel passato")
-    if body.mode == "hourly":
-        if body.start_hour is None or not body.hours:
-            raise HTTPException(422, "Indica ora di inizio e durata")
-        if body.start_hour < OPEN_HOUR or body.start_hour + body.hours > CLOSE_HOUR or body.hours < 1:
-            raise HTTPException(422, f"Orario disponibile {OPEN_HOUR}:00-{CLOSE_HOUR}:00")
-        start = f"{d.isoformat()}T{body.start_hour:02d}:00"
-        end = f"{d.isoformat()}T{body.start_hour + body.hours:02d}:00"
-        return start, end, body.hours
     days = body.days or 1
     if days < 1 or days > 30:
         raise HTTPException(422, "Durata tra 1 e 30 giorni")
@@ -278,7 +273,7 @@ async def availability(bike: dict, start: Optional[str], end: Optional[str]) -> 
 
 @api.get("/meta")
 async def meta():
-    return {"sizes": SIZES, "size_heights": SIZE_HEIGHTS, "categories": CATEGORIES,
+    return {"sizes": SIZES, "size_heights": SIZE_HEIGHTS, "categories": CATEGORIES, "category_prices": CATEGORY_PRICES,
             "open_hour": OPEN_HOUR, "close_hour": CLOSE_HOUR, "currency": "EUR"}
 
 
@@ -316,7 +311,7 @@ async def quote(bike_id: str, body: BookingIn):
         raise HTTPException(404, "Bici non trovata")
     start, end, units = parse_range(body)
     avail = await availability(b, start, end)
-    price = b["price_hour"] if body.mode == "hourly" else b["price_day"]
+    price = b["price_day"]
     return {"start": start, "end": end, "units": units, "total": round(price * units, 2), "available": avail}
 
 
@@ -330,7 +325,7 @@ async def create_booking(body: BookingIn, user: dict = Depends(current_user)):
     avail = await availability(b, start, end)
     if avail.get(body.size, 0) <= 0:
         raise HTTPException(409, f"Taglia {body.size} non disponibile per il periodo scelto")
-    price = b["price_hour"] if body.mode == "hourly" else b["price_day"]
+    price = b["price_day"]
     booking = Booking(
         user_id=user["id"], user_email=user["email"], user_name=user.get("name") or user["email"],
         bike_id=b["id"], bike_name=b["name"], bike_image=b.get("image_url", ""), size=body.size,
@@ -431,11 +426,16 @@ async def stripe_webhook(request: Request):
 
 
 @api.get("/payments/return", response_class=HTMLResponse)
-async def payment_return(cancelled: Optional[str] = None):
-    msg = "Pagamento annullato" if cancelled else "Pagamento completato"
+async def payment_return(cancelled: Optional[str] = None, lang: str = "it"):
+    if lang == "en":
+        msg = "Payment cancelled" if cancelled else "Payment completed"
+        hint = "Close this window and return to the Noleggio Nuovo app."
+    else:
+        msg = "Pagamento annullato" if cancelled else "Pagamento completato"
+        hint = "Chiudi questa finestra e torna all'app Noleggio Nuovo."
     return f"""<html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head>
 <body style='font-family:-apple-system,sans-serif;text-align:center;padding:60px 24px;color:#121212'>
-<h2>{msg}</h2><p>Chiudi questa finestra e torna all'app Noleggio Nuovo.</p></body></html>"""
+<h2>{msg}</h2><p>{hint}</p></body></html>"""
 
 
 # ---------------- Admin ----------------
@@ -502,23 +502,32 @@ async def admin_delete_bike(bike_id: str, _: dict = Depends(admin_user)):
 
 # ---------------- Startup / seed ----------------
 SEED_BIKES = [
-    {"name": "Bianchi Arcadex GRX", "category": "gravel", "price_hour": 8, "price_day": 35,
-     "description": "Gravel leggera in alluminio, Shimano GRX 2x11. Perfetta per strade bianche e sterrati.",
-     "image_url": "https://images.pexels.com/photos/33199511/pexels-photo-33199511.jpeg?auto=compress&cs=tinysrgb&w=940",
+    {"name": "Bianchi Arcadex GRX", "category": "gravel", "price_day": 40,
+     "description": "Gravel muscolare in alluminio, leggera e reattiva. Perfetta per strade bianche, sterrati e lunghi giri in campagna.",
+     "description_en": "Lightweight, responsive aluminium gravel bike. Perfect for white roads, dirt tracks and long countryside rides.",
+     "image_url": "https://images.unsplash.com/photo-1632061046597-325464194c23?w=1200&q=70&auto=format&fit=crop",
+     "specs": {"frame": "Alluminio / Aluminium", "groupset": "Shimano GRX 2x11", "brakes": "Shimano GRX idrauliche a disco / hydraulic disc",
+               "wheels": "700c, WTB Riddler 45 mm", "weight": "9,8 kg"},
      "stock": {"S": 2, "M": 3, "L": 3, "XL": 1}},
-    {"name": "Specialized Turbo Creo", "category": "ebike", "price_hour": 15, "price_day": 60,
-     "description": "E-gravel con motore SL e autonomia fino a 120 km. Salite senza fatica.",
-     "image_url": "https://images.pexels.com/photos/16435192/pexels-photo-16435192.jpeg?auto=compress&cs=tinysrgb&w=940",
+    {"name": "Specialized Turbo Creo 2", "category": "egravel", "price_day": 50,
+     "description": "E-gravel leggera con motore SL: assistenza naturale, salite senza fatica e grande autonomia.",
+     "description_en": "Lightweight e-gravel with SL motor: natural assistance, effortless climbs and long range.",
+     "image_url": "https://images.pexels.com/photos/33199511/pexels-photo-33199511.jpeg?auto=compress&cs=tinysrgb&w=1200",
+     "specs": {"frame": "Carbonio FACT 11r / Carbon", "motor": "Specialized SL 1.2, 50 Nm", "battery": "320 Wh",
+               "range": "fino a 130 km / up to 130 km", "groupset": "Shimano GRX 1x11", "brakes": "Idrauliche a disco / hydraulic disc",
+               "wheels": "700c, Pathfinder 47 mm", "weight": "13,4 kg"},
      "stock": {"S": 1, "M": 2, "L": 2, "XL": 1}},
-    {"name": "Cannondale Topstone 2", "category": "gravel_muscolare", "price_hour": 7, "price_day": 30,
-     "description": "Gravel muscolare robusta e versatile, ideale per giri lunghi in campagna.",
-     "image_url": "https://images.pexels.com/photos/12266469/pexels-photo-12266469.jpeg?auto=compress&cs=tinysrgb&w=940",
-     "stock": {"S": 2, "M": 2, "L": 2, "XL": 2}},
-    {"name": "Orbea Vibe H30", "category": "ebike", "price_hour": 12, "price_day": 50,
-     "description": "E-bike urbana e trekking, comoda e facile per tutti.",
-     "image_url": "https://images.pexels.com/photos/13799226/pexels-photo-13799226.jpeg?auto=compress&cs=tinysrgb&w=940",
-     "stock": {"S": 1, "M": 1, "L": 1, "XL": 0}},
+    {"name": "Ghost E-Riot AM", "category": "ebike_mtb", "price_day": 60,
+     "description": "E-MTB biammortizzata per sentieri e salite impegnative. Motore potente e batteria generosa per tutta la giornata.",
+     "description_en": "Full-suspension e-MTB for trails and steep climbs. Powerful motor and big battery for a full day out.",
+     "image_url": "https://images.pexels.com/photos/8755668/pexels-photo-8755668.jpeg?auto=compress&cs=tinysrgb&w=1200",
+     "specs": {"frame": "Alluminio / Aluminium", "motor": "Shimano EP8, 85 Nm", "battery": "720 Wh",
+               "range": "fino a 100 km / up to 100 km", "suspension": "160 mm – 150 mm", "groupset": "Shimano Deore 12v",
+               "brakes": "Shimano 4 pistoncini / 4-piston", "wheels": "29\" – 27,5\"", "weight": "24,5 kg"},
+     "stock": {"S": 1, "M": 2, "L": 2, "XL": 1}},
 ]
+OLD_SEED_NAMES = {"Bianchi Arcadex GRX": "Bianchi Arcadex GRX", "Specialized Turbo Creo": "Specialized Turbo Creo 2",
+                  "Orbea Wild H30": "Ghost E-Riot AM"}
 
 
 @app.on_event("startup")
@@ -533,12 +542,64 @@ async def startup():
     await db.users.update_one({"email": email}, {"$setOnInsert": {
         "id": new_id(), "email": email, "name": "Admin", "role": "admin",
         "password_hash": hash_pw(os.environ["ADMIN_PASSWORD"]), "created_at": now_iso()}}, upsert=True)
+    # Migration: drop bikes from the old category set (gravel/ebike/gravel_muscolare era).
+    if await db.bikes.count_documents({"$or": [{"category": {"$nin": CATEGORIES}}, {"price_hour": {"$exists": True}}]}):
+        await db.bikes.delete_many({})
+    # Migration: refresh seeded bikes with real photos and specs (only those not edited yet).
+    seed_by_name = {b["name"]: b for b in SEED_BIKES}
+    for old, new in OLD_SEED_NAMES.items():
+        b = seed_by_name[new]
+        await db.bikes.update_one({"name": old, "specs": {"$exists": False}}, {"$set": {
+            k: b[k] for k in ("name", "description", "description_en", "image_url", "specs")}})
     if await db.bikes.count_documents({}) == 0:
         for b in SEED_BIKES:
             await db.bikes.insert_one(Bike(**b).model_dump())
 
 
 app.include_router(api)
+
+# ---------------- i18n for error messages ----------------
+EN_ERRORS = {
+    "Non autenticato": "Not authenticated",
+    "Sessione scaduta": "Session expired",
+    "Utente non trovato": "User not found",
+    "Solo amministratori": "Administrators only",
+    "Email non valida": "Invalid email",
+    "Email già registrata": "Email already registered",
+    "Email o password errati": "Wrong email or password",
+    "Sessione Google non valida": "Invalid Google session",
+    "Data non valida": "Invalid date",
+    "Non puoi prenotare nel passato": "You cannot book in the past",
+    "Indica ora di inizio e durata": "Please choose start time and duration",
+    "Durata tra 1 e 30 giorni": "Duration must be between 1 and 30 days",
+    "Bici non trovata": "Bike not found",
+    "Prenotazione non trovata": "Booking not found",
+    "Prenotazione non annullabile": "This booking cannot be cancelled",
+    "Prenotazione non pagabile": "This booking cannot be paid",
+    "Pagamento non trovato": "Payment not found",
+    "Webhook non valido": "Invalid webhook",
+    "Nessuna modifica": "No changes",
+}
+
+
+def translate_error(msg: str) -> str:
+    if msg in EN_ERRORS:
+        return EN_ERRORS[msg]
+    m = re.match(r"Taglia (\w+) non disponibile per il periodo scelto", msg)
+    if m:
+        return f"Size {m.group(1)} is not available for the selected period"
+    m = re.match(r"Orario disponibile (.+)", msg)
+    if m:
+        return f"Opening hours {m.group(1)}"
+    return msg
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    detail = exc.detail
+    if isinstance(detail, str) and request.headers.get("accept-language", "").lower().startswith("en"):
+        detail = translate_error(detail)
+    return JSONResponse({"detail": detail}, status_code=exc.status_code, headers=getattr(exc, "headers", None))
 
 app.add_middleware(
     CORSMiddleware,

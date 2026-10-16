@@ -20,7 +20,16 @@ def user_token(api):
     email = f"TEST_user_{uuid.uuid4().hex[:8]}@example.com"
     r = api.post(f"{BASE_URL}/api/auth/register", json={"email": email, "password": "testpass123", "name": "Test User"})
     assert r.status_code == 200, r.text
-    return r.json()["token"], email
+    token = r.json()["token"]
+    yield token, email
+    # Cleanup: cancel any still-active bookings created by this test user
+    try:
+        bks = api.get(f"{BASE_URL}/api/bookings/me", headers=h(token)).json()
+        for b in bks:
+            if b.get("status") in ("pending_payment", "confirmed"):
+                api.post(f"{BASE_URL}/api/bookings/{b['id']}/cancel", headers=h(token))
+    except Exception:
+        pass
 
 def h(token):
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}

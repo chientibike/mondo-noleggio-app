@@ -1,4 +1,5 @@
 import { storage } from "@/src/utils/storage";
+import { getLang, tr } from "@/src/i18n";
 
 export const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL as string;
 export const TOKEN_KEY = "auth_token";
@@ -37,7 +38,7 @@ export class ApiError extends Error {
 }
 
 export async function api<T = any>(path: string, opts: { method?: string; body?: any } = {}): Promise<T> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = { "Content-Type": "application/json", "Accept-Language": getLang() };
   if (memToken) headers.Authorization = `Bearer ${memToken}`;
   const res = await fetch(`${BACKEND_URL}/api${path}`, {
     method: opts.method ?? "GET",
@@ -48,23 +49,25 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) {
     if (res.status === 401 && memToken) onUnauthorized?.();
-    let msg = "Si è verificato un errore";
-    if (data?.detail) msg = typeof data.detail === "string" ? data.detail : "Dati non validi";
+    let msg = tr("generic_error");
+    if (data?.detail) msg = typeof data.detail === "string" ? data.detail : tr("invalid_data");
     throw new ApiError(res.status, msg);
   }
   return data as T;
 }
 
 export type Size = "S" | "M" | "L" | "XL";
-export type Category = "gravel" | "ebike" | "gravel_muscolare";
+export type Category = "gravel" | "egravel" | "ebike_mtb";
+export const CATEGORY_PRICES: Record<Category, number> = { gravel: 40, egravel: 50, ebike_mtb: 60 };
 
 export type Bike = {
   id: string;
   name: string;
   category: Category;
   description: string;
+  description_en?: string;
+  specs?: Record<string, string>;
   image_url: string;
-  price_hour: number;
   price_day: number;
   stock: Record<Size, number>;
   available: Record<Size, number>;

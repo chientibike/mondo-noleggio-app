@@ -8,7 +8,8 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 
 import { api, type Bike, type Booking, type Quote } from "@/src/api";
 import { Button } from "@/src/components/ui";
-import { SIZE_HEIGHTS, euro, fmtRange } from "@/src/format";
+import { SIZE_HEIGHTS, euro, fmtRange, fmtUnits } from "@/src/format";
+import { useI18n } from "@/src/i18n";
 import { startStripePayment } from "@/src/payments";
 import { useToast } from "@/src/toast";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -16,24 +17,23 @@ import { makeStyles, useTheme } from "@/src/theme";
 type Method = "stripe" | "store";
 
 export default function Checkout() {
-  const p = useLocalSearchParams<{ bike_id: string; size: string; mode: "hourly" | "daily"; date: string; start_hour: string; hours: string; days: string }>();
+  const p = useLocalSearchParams<{ bike_id: string; size: string; date: string; days: string }>();
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { colors } = useTheme();
   const router = useRouter();
   const toast = useToast();
   const qc = useQueryClient();
+  const { t } = useI18n();
   const [method, setMethod] = useState<Method>("stripe");
   const [busy, setBusy] = useState(false);
 
   const body = {
     bike_id: p.bike_id,
     size: p.size,
-    mode: p.mode,
+    mode: "daily" as const,
     date: p.date,
-    start_hour: p.mode === "hourly" ? Number(p.start_hour) : undefined,
-    hours: p.mode === "hourly" ? Number(p.hours) : undefined,
-    days: p.mode === "daily" ? Number(p.days) : undefined,
+    days: Number(p.days),
   };
 
   const bikeQ = useQuery({ queryKey: ["bike", p.bike_id], queryFn: () => api<Bike>(`/bikes/${p.bike_id}`) });
@@ -65,9 +65,9 @@ export default function Checkout() {
   const quote = quoteQ.data;
 
   const methods: { key: Method | "paypal"; title: string; sub: string; icon: any; disabled?: boolean }[] = [
-    { key: "stripe", title: "Paga ora con carta", sub: "Pagamento sicuro con Stripe", icon: "card-outline" },
-    { key: "store", title: "Paga in negozio", sub: "Paghi al ritiro della bici", icon: "storefront-outline" },
-    { key: "paypal", title: "PayPal", sub: "Presto disponibile", icon: "logo-paypal", disabled: true },
+    { key: "stripe", title: t("pay_card"), sub: t("pay_card_sub"), icon: "card-outline" },
+    { key: "store", title: t("pay_store"), sub: t("pay_store_sub"), icon: "storefront-outline" },
+    { key: "paypal", title: "PayPal", sub: t("coming_soon"), icon: "logo-paypal", disabled: true },
   ];
 
   return (
@@ -76,7 +76,7 @@ export default function Checkout() {
         <Pressable testID="checkout-back" onPress={() => router.back()} style={styles.back}>
           <Ionicons name="chevron-back" size={24} color={colors.onSurface} />
         </Pressable>
-        <Text style={styles.title}>Conferma prenotazione</Text>
+        <Text style={styles.title}>{t("confirm_booking")}</Text>
       </View>
 
       {!bike || !quote ? (
@@ -84,7 +84,7 @@ export default function Checkout() {
           {quoteQ.isError ? (
             <>
               <Text style={styles.muted}>{(quoteQ.error as Error).message}</Text>
-              <Button testID="checkout-retry" title="Riprova" variant="secondary" onPress={() => quoteQ.refetch()} />
+              <Button testID="checkout-retry" title={t("retry")} variant="secondary" onPress={() => quoteQ.refetch()} />
             </>
           ) : (
             <ActivityIndicator color={colors.brandPrimary} />
@@ -96,21 +96,21 @@ export default function Checkout() {
             <Image source={{ uri: bike.image_url }} style={styles.thumb} contentFit="cover" />
             <View style={{ flex: 1, gap: 4 }}>
               <Text style={styles.bikeName}>{bike.name}</Text>
-              <Text style={styles.meta}>Taglia {p.size} · {SIZE_HEIGHTS[p.size as keyof typeof SIZE_HEIGHTS]}</Text>
+              <Text style={styles.meta}>{t("size_x", { s: p.size })} · {SIZE_HEIGHTS[p.size as keyof typeof SIZE_HEIGHTS]}</Text>
             </View>
           </View>
           <View style={styles.box}>
-            <Row label="Quando" value={fmtRange({ start: quote.start, end: quote.end, mode: p.mode })} />
-            <Row label="Durata" value={p.mode === "hourly" ? `${quote.units} ${quote.units === 1 ? "ora" : "ore"}` : `${quote.units} ${quote.units === 1 ? "giorno" : "giorni"}`} />
-            <Row label="Tariffa" value={p.mode === "hourly" ? `${euro(bike.price_hour)}/ora` : `${euro(bike.price_day)}/giorno`} />
+            <Row label={t("when")} value={fmtRange({ start: quote.start, end: quote.end, mode: "daily" })} />
+            <Row label={t("duration")} value={fmtUnits("daily", quote.units)} />
+            <Row label={t("rate")} value={`${euro(bike.price_day)}${t("per_day")}`} />
             <View style={styles.divider} />
             <View style={styles.rowLine}>
-              <Text style={styles.totalLabel}>Totale</Text>
+              <Text style={styles.totalLabel}>{t("total")}</Text>
               <Text style={styles.total} testID="checkout-total">{euro(quote.total)}</Text>
             </View>
           </View>
 
-          <Text style={styles.section}>Metodo di pagamento</Text>
+          <Text style={styles.section}>{t("payment_method")}</Text>
           {methods.map((m) => {
             const on = method === m.key;
             return (
@@ -136,7 +136,7 @@ export default function Checkout() {
       <View style={[styles.ctaBar, { paddingBottom: insets.bottom + 16 }]}>
         <Button
           testID="confirm-booking-button"
-          title={method === "stripe" ? "Conferma e paga" : "Conferma prenotazione"}
+          title={method === "stripe" ? t("confirm_and_pay") : t("confirm_booking")}
           loading={busy}
           disabled={!quote || (quote.available?.[p.size as "S"] ?? 0) <= 0}
           onPress={confirm}
