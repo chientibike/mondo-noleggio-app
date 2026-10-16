@@ -91,8 +91,12 @@ export type Booking = {
   payment_status: "pending" | "paid" | "to_pay_in_store" | "failed";
   status: "pending_payment" | "confirmed" | "cancelled" | "completed";
   created_at: string;
+  source?: "app" | "sheet";
+  sheet_id?: string | null;
+  unit_id?: string | null;
+  phone?: string | null;
 };
 
-export type User = { id: string; email: string; name: string; role: string; picture?: string | null };
+export type User = { id: string; email: string; name: string; role: string; picture?: string | null; phone?: string | null };
 
 export type Quote = { start: string; end: string; units: number; total: number; available: Record<Size, number> };

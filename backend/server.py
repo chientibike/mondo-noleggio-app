@@ -2,6 +2,8 @@ from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 import re
+import asyncio
+from sheet_sync import sync_from_sheet
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -30,6 +32,7 @@ JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALG = "HS256"
 TOKEN_DAYS = 7
 STRIPE_API_KEY = os.environ['STRIPE_API_KEY']
+SHEET_SYNC_SECONDS = 120
 
 SIZES = ["S", "M", "L", "XL"]
 SIZE_HEIGHTS = {"S": "155-165 cm", "M": "165-175 cm", "L": "175-185 cm", "XL": "185-195 cm"}
@@ -66,6 +69,7 @@ class UserPublic(BaseModel):
     name: str
     role: str
     picture: Optional[str] = None
+    phone: Optional[str] = None
 
 
 class RegisterIn(BaseModel):
@@ -125,6 +129,10 @@ class Booking(BaseModel):
     payment_status: Literal["pending", "paid", "to_pay_in_store", "failed"]
     status: Literal["pending_payment", "confirmed", "cancelled", "completed"]
     stripe_session_id: Optional[str] = None
+    source: str = "app"  # "app" or "sheet"
+    sheet_id: Optional[str] = None
+    unit_id: Optional[str] = None
+    phone: Optional[str] = None
     created_at: str = Field(default_factory=now_iso)
 
 
@@ -135,6 +143,7 @@ class BookingIn(BaseModel):
     date: str  # YYYY-MM-DD
     days: Optional[int] = None
     payment_method: Literal["stripe", "store"]
+    phone: Optional[str] = Field(default=None, max_length=30)
 
 
 class CheckoutIn(BaseModel):
@@ -166,7 +175,7 @@ def make_token(user_id: str) -> str:
 
 def to_public(u: dict) -> UserPublic:
     return UserPublic(id=u["id"], email=u["email"], name=u.get("name") or u["email"].split("@")[0],
-                      role=u.get("role", "user"), picture=u.get("picture"))
+                      role=u.get("role", "user"), picture=u.get("picture"), phone=u.get("phone"))
 
 
 async def current_user(request: Request) -> dict:
@@ -333,7 +342,10 @@ async def create_booking(body: BookingIn, user: dict = Depends(current_user)):
         payment_method=body.payment_method,
         payment_status="pending" if body.payment_method == "stripe" else "to_pay_in_store",
         status="pending_payment" if body.payment_method == "stripe" else "confirmed",
+        phone=(body.phone or "").strip() or user.get("phone"),
     )
+    if body.phone and body.phone.strip():
+        await db.users.update_one({"id": user["id"]}, {"$set": {"phone": body.phone.strip()}})
     await db.bookings.insert_one(booking.model_dump())
     return booking
 
@@ -458,6 +470,31 @@ async def admin_patch_booking(booking_id: str, body: AdminBookingPatch, _: dict 
     return Booking(**res)
 
 
+@api.post("/admin/sheet/sync")
+async def admin_sheet_sync(_: dict = Depends(admin_user)):
+    try:
+        return await sync_from_sheet(db)
+    except Exception as e:
+        logger.warning("Sheet sync failed: %s", e)
+        raise HTTPException(502, "Foglio Google non raggiungibile")
+
+
+@api.get("/admin/sheet/status")
+async def admin_sheet_status(_: dict = Depends(admin_user)):
+    doc = await db.meta.find_one({"_id": "sheet_sync"}, {"_id": 0})
+    return doc or {"synced_at": None}
+
+
+async def sheet_sync_loop():
+    while True:
+        try:
+            await sync_from_sheet(db)
+        except Exception as e:
+            logger.warning("Sheet sync failed: %s", e)
+            await db.meta.update_one({"_id": "sheet_sync"}, {"$set": {"error": str(e)}}, upsert=True)
+        await asyncio.sleep(SHEET_SYNC_SECONDS)
+
+
 @api.get("/admin/stats")
 async def admin_stats(_: dict = Depends(admin_user)):
     today = datetime.now().date().isoformat()
@@ -555,6 +592,7 @@ async def startup():
     if await db.bikes.count_documents({}) == 0:
         for b in SEED_BIKES:
             await db.bikes.insert_one(Bike(**b).model_dump())
+    asyncio.create_task(sheet_sync_loop())
 
 
 app.include_router(api)
@@ -580,6 +618,7 @@ EN_ERRORS = {
     "Pagamento non trovato": "Payment not found",
     "Webhook non valido": "Invalid webhook",
     "Nessuna modifica": "No changes",
+    "Foglio Google non raggiungibile": "Google Sheet not reachable",
 }
 
 

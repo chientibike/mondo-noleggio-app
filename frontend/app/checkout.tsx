@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+import { useAuth } from "@/src/auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
@@ -27,6 +29,9 @@ export default function Checkout() {
   const { t } = useI18n();
   const [method, setMethod] = useState<Method>("stripe");
   const [busy, setBusy] = useState(false);
+  const { user } = useAuth();
+  const [phone, setPhone] = useState(user?.phone ?? "");
+  const phoneOk = phone.replace(/\D/g, "").length >= 6;
 
   const body = {
     bike_id: p.bike_id,
@@ -45,7 +50,7 @@ export default function Checkout() {
   const confirm = async () => {
     setBusy(true);
     try {
-      const booking = await api<Booking>("/bookings", { method: "POST", body: { ...body, payment_method: method } });
+      const booking = await api<Booking>("/bookings", { method: "POST", body: { ...body, payment_method: method, phone: phone.trim() } });
       qc.invalidateQueries({ queryKey: ["my-bookings"] });
       qc.invalidateQueries({ queryKey: ["quote"] });
       if (method === "store") {
@@ -91,7 +96,7 @@ export default function Checkout() {
           )}
         </View>
       ) : (
-        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}>
+        <KeyboardAwareScrollView bottomOffset={120} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}>
           <View style={styles.summary} testID="checkout-summary">
             <Image source={{ uri: bike.image_url }} style={styles.thumb} contentFit="cover" />
             <View style={{ flex: 1, gap: 4 }}>
@@ -110,6 +115,17 @@ export default function Checkout() {
             </View>
           </View>
 
+          <Text style={styles.section}>{t("phone")}</Text>
+          <TextInput
+            testID="checkout-phone-input"
+            style={styles.input}
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
+            autoComplete="tel"
+            placeholder="333 1234567"
+            placeholderTextColor={colors.muted}
+          />
           <Text style={styles.section}>{t("payment_method")}</Text>
           {methods.map((m) => {
             const on = method === m.key;
@@ -130,7 +146,7 @@ export default function Checkout() {
               </Pressable>
             );
           })}
-        </ScrollView>
+        </KeyboardAwareScrollView>
       )}
 
       <View style={[styles.ctaBar, { paddingBottom: insets.bottom + 16 }]}>
@@ -138,7 +154,7 @@ export default function Checkout() {
           testID="confirm-booking-button"
           title={method === "stripe" ? t("confirm_and_pay") : t("confirm_booking")}
           loading={busy}
-          disabled={!quote || (quote.available?.[p.size as "S"] ?? 0) <= 0}
+          disabled={!quote || !phoneOk || (quote.available?.[p.size as "S"] ?? 0) <= 0}
           onPress={confirm}
         />
       </View>
@@ -178,5 +194,6 @@ const useStyles = makeStyles((c) => ({
   method: { backgroundColor: c.surface, borderRadius: 16, padding: 16, flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1.5, borderColor: c.surface },
   methodOn: { borderColor: c.brandPrimary },
   methodTitle: { fontSize: 15, fontWeight: "700", color: c.onSurface },
+  input: { height: 52, borderRadius: 12, backgroundColor: c.surface, paddingHorizontal: 16, fontSize: 16, color: c.onSurface, borderWidth: 1, borderColor: c.border },
   ctaBar: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 24, paddingTop: 16, backgroundColor: c.surface, borderTopWidth: 0.5, borderTopColor: c.border },
 }));

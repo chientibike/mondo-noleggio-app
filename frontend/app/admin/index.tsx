@@ -51,6 +51,21 @@ export default function Admin() {
     qc.invalidateQueries({ queryKey: ["bikes"] });
   };
 
+  const sheetQ = useQuery({
+    queryKey: ["sheet-status"],
+    queryFn: () => api<{ synced_at: string | null; units?: number; rentals?: number; error?: string | null }>("/admin/sheet/status"),
+    enabled: isAdmin,
+  });
+  const syncNow = useMutation({
+    mutationFn: () => api("/admin/sheet/sync", { method: "POST" }),
+    onSuccess: () => {
+      toast(t("sheet_synced"), "success");
+      qc.invalidateQueries({ queryKey: ["sheet-status"] });
+      refreshAll();
+    },
+    onError: (e: any) => toast(e.message, "error"),
+  });
+
   const patch = useMutation({
     mutationFn: ({ id, body }: { id: string; body: any }) => api(`/admin/bookings/${id}`, { method: "PATCH", body }),
     onSuccess: () => {
@@ -81,6 +96,7 @@ export default function Admin() {
   }
 
   const s = stats.data;
+  const sheet = sheetQ.data;
 
   return (
     <View style={styles.root}>
@@ -96,6 +112,20 @@ export default function Admin() {
           <Stat label={t("stat_today")} value={s ? String(s.today_bookings) : "—"} testID="stat-today" />
           <Stat label={t("stat_active")} value={s ? String(s.active_bookings) : "—"} testID="stat-active" />
           <Stat label={t("stat_revenue")} value={s ? euro(s.revenue_paid) : "—"} testID="stat-revenue" />
+        </View>
+        <View style={styles.sheetCard} testID="sheet-sync-card">
+          <Ionicons name="grid-outline" size={20} color={colors.brandPrimary} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sheetCardTitle}>{t("sheet_title")}</Text>
+            <Text style={styles.meta} testID="sheet-sync-status" numberOfLines={1}>
+              {sheet?.synced_at
+                ? t("sheet_last", { time: new Date(sheet.synced_at).toLocaleTimeString().slice(0, 5), n: sheet.rentals ?? 0 })
+                : t("sheet_never")}
+            </Text>
+          </View>
+          <Pressable testID="sheet-sync-button" onPress={() => syncNow.mutate()} disabled={syncNow.isPending} style={styles.syncBtn}>
+            {syncNow.isPending ? <ActivityIndicator size="small" color={colors.onBrandSecondary} /> : <Ionicons name="sync" size={20} color={colors.onBrandSecondary} />}
+          </Pressable>
         </View>
         <View style={styles.segment}>
           {(["bikes", "bookings"] as const).map((k) => (
@@ -157,12 +187,13 @@ export default function Admin() {
                 <Text style={styles.total}>{euro(item.total)}</Text>
               </View>
               <Text style={styles.meta}>{fmtRange(item)}</Text>
-              <Text style={styles.meta}>{item.user_name} · {item.user_email}</Text>
+              <Text style={styles.meta}>{item.user_name}{item.user_email ? ` · ${item.user_email}` : ""}{item.phone ? ` · ${item.phone}` : ""}</Text>
+              {item.source === "sheet" && <Text style={styles.sheetTag}>{t("from_sheet", { id: item.sheet_id ?? "", unit: item.unit_id ?? "" })}</Text>}
               <View style={styles.badges}>
                 <Badge label={STATUS_LABELS[item.status]} tone={statusTone(item)} />
                 <Badge label={PAYMENT_LABELS[item.payment_status]} tone={item.payment_status === "paid" ? "brand" : "neutral"} />
               </View>
-              {item.status !== "cancelled" && item.status !== "completed" && (
+              {item.source !== "sheet" && item.status !== "cancelled" && item.status !== "completed" && (
                 <View style={styles.actions}>
                   {item.payment_status !== "paid" && (
                     <Button testID={`admin-mark-paid-${item.id}`} title={t("mark_paid")} variant="secondary" onPress={() => patch.mutate({ id: item.id, body: { payment_status: "paid", status: "confirmed" } })} style={{ flex: 1 }} />
@@ -216,6 +247,10 @@ const useStyles = makeStyles((c) => ({
   back: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 22, fontWeight: "800", color: c.onSurface },
   statsRow: { flexDirection: "row", gap: 8, paddingHorizontal: 16 },
+  sheetCard: { flexDirection: "row", alignItems: "center", gap: 12, marginHorizontal: 16, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: c.border },
+  sheetCardTitle: { fontSize: 14, fontWeight: "700", color: c.onSurface },
+  syncBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.brandSecondary, alignItems: "center", justifyContent: "center" },
+  sheetTag: { fontSize: 12, fontWeight: "700", color: c.brand },
   stat: { flex: 1, backgroundColor: c.brandTertiary, borderRadius: 12, padding: 10 },
   statValue: { fontSize: 17, fontWeight: "800", color: c.onBrandTertiary },
   statLabel: { fontSize: 11, color: c.onSurfaceTertiary, marginTop: 2 },

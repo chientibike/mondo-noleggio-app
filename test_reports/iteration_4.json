@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 4 - Sheet sync (READ) + phone at checkout. Backend: 41/41 pytest tests PASSED (31 iter-3 regression + 10 new iter-4). New tests cover: POST /api/admin/sheet/sync returns units=16, rentals=11, stock gravel/egravel {S:1,M:2,L:2,XL:1}, ebike_mtb {S:0,M:2,L:2,XL:0}, synced_at populated, error:None; non-admin GET/POST sheet routes -> 403; GET /api/admin/sheet/status returns synced_at and rentals=11; sync is idempotent (re-running keeps the same 11 sheet_ids, no duplicates); GET /api/bikes stock matches the sheet counts; Raymon Soreno Comp size L on 2026-10-18 quote shows L available 0 (GR-010 & GR-011 booked block it); sheet bookings DO NOT appear in /api/bookings/me of a normal user but DO appear in /api/admin/bookings with source=sheet, sheet_id NOL-xxx and unit_id. Phone test: POST /api/bookings with phone persists on booking + user; /api/auth/me returns the phone. Frontend (390x844): logged in as admin via UI, admin screen renders sheet-sync-card with 'Foglio Google \"modulo noleggio\" · Aggiornato alle HH:MM · 11 noleggi letti'; tapping sheet-sync-button fires sync and updates the timestamp; admin bikes list reflects sheet stock (Soreno S:1 M:2 L:2 XL:1 · Norza S:1 M:2 L:2 XL:1 · Vamok S:0 M:2 L:2 XL:0); Prenotazioni tab shows 18 bookings, 11 tagged 'Dal foglio · NOL-...' with no action buttons (verified by DOM scan: outerHTML has no admin-booking-confirm/cancel inside sheet entries). Checkout flow: checkout-phone-input visible, confirm-booking-button aria-disabled='true' with empty phone and with 3-digit phone, aria-disabled=None with 10 digits -> booking confirmed and routed to /payment-result. Prefill verified end-to-end: new user books with phone 3339876543 (via API), re-opens checkout in UI -> input value prefilled to '3339876543'. Cleanup: deleted 10 bookings belonging to 31 @example.com users to keep admin list clean.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_backend.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "sheet_sync.sync_from_sheet uses $set + $setOnInsert with upsert on (sheet_id, source=sheet) -> idempotent and preserves the booking id/created_at across re-syncs; verified by test_sheet_sync_idempotent.",
+    "sheet_sync removes stale sheet bookings via delete_many({source:sheet, sheet_id: {$nin: seen}}) -> edits in the sheet (deletion/rename) will reflect; stock recomputed from fleet each run.",
+    "parse_sheet correctly derives size from 'TG S|M|L|XL' and category from EG/GR/EB prefixes; out-of-service / sold units excluded via substring check on status (servizio|venduta).",
+    "Backend /bookings sets phone on booking and persists on user only when a non-empty phone is supplied; falls back to user.phone if omitted -> prefill works (/api/auth/me returns phone and checkout.tsx uses it as default state).",
+    "Frontend checkout gates confirm button on phoneOk = digits>=6 AND availability>0 -> prevents sending empty phone; nice UX could add inline error, but requirement (disabled until >=6 digits) is met."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_backend.py (added TestSheetSync with 8 tests + TestPhone with 1 test; 41 pytest tests total pass)"
+  ],
+  "success_rate": {"backend": "100% (41/41)", "frontend": "100% - sheet sync card, bikes stock, prenotazioni sheet-tags, checkout phone required + prefill all verified"},
+  "seed_data_creation": "No seed changes. Called POST /api/admin/sheet/sync which upserts 11 sheet bookings and overwrites bikes.stock from the Google Sheet; the backend background loop (sheet_sync_loop every 120s) will keep this in sync. Test fixtures create TEST_* users; cleanup script deleted 10 test bookings across 31 @example.com users at the end.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend URL in EXPO_PUBLIC_BACKEND_URL. Admin: admin@noleggionuovo.it/Admin2026!. Run `cd /app/backend && pytest tests/test_backend.py` for the full 41-test regression (includes TestSheetSync and TestPhone). Key iter-4 testIDs: sheet-sync-card, sheet-sync-button, admin-tab-bookings, admin-booking-<id>, checkout-phone-input, confirm-booking-button, size-option-<S|M|L|XL>, book-now-button, login-email-input, login-password-input, login-submit-button, toggle-auth-mode, register-name-input. Sheet-sync is READ-only; the task note says app -> sheet WRITE is pending OAuth and must NOT be tested. Bikes stock comes from the sheet (sync overwrites every 120s) so any availability-exhaustion tests must use future dates and cancel bookings afterwards. Sheet booking format: source='sheet', sheet_id='NOL-xxx', unit_id='GR-xxx|EG-xxx|EB-xxx', user_id='sheet'. Expected sheet totals: units=16, rentals=11, stock gravel {S:1,M:2,L:2,XL:1}, egravel {S:1,M:2,L:2,XL:1}, ebike_mtb {S:0,M:2,L:2,XL:0}.",
+  "rca_of_issue": "N/A - no bug reported this iteration; all feature verification steps passed on first execution."
+}

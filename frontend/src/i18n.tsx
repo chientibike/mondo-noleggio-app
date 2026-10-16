@@ -172,6 +172,12 @@ const it = {
   spec_wheels: "Ruote / gomme",
   spec_weight: "Peso",
   description_en: "Descrizione in inglese",
+  sheet_title: "Foglio Google \"modulo noleggio\"",
+  phone: "Telefono",
+  sheet_last: "Aggiornato alle {time} · {n} noleggi letti",
+  sheet_never: "Non ancora sincronizzato",
+  sheet_synced: "Foglio sincronizzato",
+  from_sheet: "Dal foglio · {id} · bici {unit}",
 };
 
 export type TKey = keyof typeof it;
@@ -343,6 +349,12 @@ const en: Record<TKey, string> = {
   spec_wheels: "Wheels / tyres",
   spec_weight: "Weight",
   description_en: "English description",
+  sheet_title: "Google Sheet \"modulo noleggio\"",
+  phone: "Phone",
+  sheet_last: "Updated at {time} · {n} rentals read",
+  sheet_never: "Not synced yet",
+  sheet_synced: "Sheet synced",
+  from_sheet: "From sheet · {id} · bike {unit}",
 };
 
 const DICTS: Record<Lang, Record<TKey, string>> = { it, en };

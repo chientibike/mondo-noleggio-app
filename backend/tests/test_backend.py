@@ -414,3 +414,132 @@ class TestAdmin:
                        json={"payment_status": "paid"}, headers=h(admin_token))
         assert rp.status_code == 200
         assert rp.json()["payment_status"] == "paid"
+
+
+
+# ------------------- Sheet Sync (iter 4) -------------------
+class TestSheetSync:
+    def test_sheet_sync_admin(self, api, admin_token):
+        """POST /api/admin/sheet/sync returns expected units/rentals/stock."""
+        r = api.post(f"{BASE_URL}/api/admin/sheet/sync", headers=h(admin_token))
+        assert r.status_code == 200, r.text
+        js = r.json()
+        assert js["units"] == 16, f"units={js['units']}"
+        assert js["rentals"] == 11, f"rentals={js['rentals']}"
+        stock = js["stock"]
+        assert stock["egravel"] == {"S": 1, "M": 2, "L": 2, "XL": 1}, stock["egravel"]
+        assert stock["gravel"] == {"S": 1, "M": 2, "L": 2, "XL": 1}, stock["gravel"]
+        assert stock["ebike_mtb"] == {"S": 0, "M": 2, "L": 2, "XL": 0}, stock["ebike_mtb"]
+        assert js.get("synced_at")
+        assert js.get("error") is None
+
+    def test_sheet_sync_forbidden_for_user(self, api, user_token):
+        token, _ = user_token
+        r = api.post(f"{BASE_URL}/api/admin/sheet/sync", headers=h(token))
+        assert r.status_code == 403
+
+    def test_sheet_status_forbidden_for_user(self, api, user_token):
+        token, _ = user_token
+        r = api.get(f"{BASE_URL}/api/admin/sheet/status", headers=h(token))
+        assert r.status_code == 403
+
+    def test_sheet_status_returns_synced_at(self, api, admin_token):
+        api.post(f"{BASE_URL}/api/admin/sheet/sync", headers=h(admin_token))
+        r = api.get(f"{BASE_URL}/api/admin/sheet/status", headers=h(admin_token))
+        assert r.status_code == 200, r.text
+        js = r.json()
+        assert js.get("synced_at")
+        assert js.get("rentals") == 11
+
+    def test_sheet_sync_idempotent(self, api, admin_token):
+        """Re-running sync does not create duplicate sheet bookings."""
+        api.post(f"{BASE_URL}/api/admin/sheet/sync", headers=h(admin_token))
+        first = api.get(f"{BASE_URL}/api/admin/bookings", headers=h(admin_token)).json()
+        sheet_first = [b for b in first if b.get("source") == "sheet"]
+        api.post(f"{BASE_URL}/api/admin/sheet/sync", headers=h(admin_token))
+        second = api.get(f"{BASE_URL}/api/admin/bookings", headers=h(admin_token)).json()
+        sheet_second = [b for b in second if b.get("source") == "sheet"]
+        ids_first = sorted(b.get("sheet_id") for b in sheet_first)
+        ids_second = sorted(b.get("sheet_id") for b in sheet_second)
+        assert ids_first == ids_second
+        # no duplicate sheet_id
+        assert len(ids_second) == len(set(ids_second))
+        # expected 11 rentals from sheet
+        assert len(sheet_second) == 11
+
+    def test_bikes_stock_matches_sheet(self, api, admin_token):
+        """After sync, GET /api/bikes stock matches sheet counts."""
+        api.post(f"{BASE_URL}/api/admin/sheet/sync", headers=h(admin_token))
+        bikes = api.get(f"{BASE_URL}/api/bikes").json()
+        by_cat = {b["category"]: b for b in bikes}
+        assert by_cat["gravel"]["stock"] == {"S": 1, "M": 2, "L": 2, "XL": 1}
+        assert by_cat["egravel"]["stock"] == {"S": 1, "M": 2, "L": 2, "XL": 1}
+        assert by_cat["ebike_mtb"]["stock"] == {"S": 0, "M": 2, "L": 2, "XL": 0}
+
+    def test_sheet_booking_blocks_availability(self, api, admin_token):
+        """Raymon Soreno Comp size L on 2026-10-18 -> L available 0 (GR-010 & GR-011 booked)."""
+        api.post(f"{BASE_URL}/api/admin/sheet/sync", headers=h(admin_token))
+        bikes = api.get(f"{BASE_URL}/api/bikes").json()
+        gravel = next(b for b in bikes if b["name"] == "Raymon Soreno Comp")
+        r = api.post(f"{BASE_URL}/api/bikes/{gravel['id']}/quote",
+                     json={"bike_id": gravel["id"], "size": "L",
+                           "date": "2026-10-18", "days": 1, "payment_method": "store"})
+        assert r.status_code == 200, r.text
+        assert r.json()["available"]["L"] == 0, r.json()["available"]
+
+    def test_sheet_bookings_not_in_user_me(self, api, user_token, admin_token):
+        """Sheet bookings do NOT appear in a normal user's /api/bookings/me."""
+        token, _ = user_token
+        api.post(f"{BASE_URL}/api/admin/sheet/sync", headers=h(admin_token))
+        r = api.get(f"{BASE_URL}/api/bookings/me", headers=h(token))
+        assert r.status_code == 200
+        for b in r.json():
+            assert b.get("source") != "sheet"
+            assert not b.get("sheet_id")
+
+    def test_sheet_bookings_in_admin_bookings(self, api, admin_token):
+        """Sheet bookings DO appear in /api/admin/bookings with source=sheet and NOL-xxx id."""
+        api.post(f"{BASE_URL}/api/admin/sheet/sync", headers=h(admin_token))
+        r = api.get(f"{BASE_URL}/api/admin/bookings", headers=h(admin_token))
+        assert r.status_code == 200
+        sheet = [b for b in r.json() if b.get("source") == "sheet"]
+        assert len(sheet) == 11, f"expected 11, got {len(sheet)}"
+        for b in sheet:
+            assert b.get("sheet_id", "").startswith("NOL-"), b.get("sheet_id")
+            assert b.get("unit_id"), f"missing unit_id in {b.get('sheet_id')}"
+
+
+# ------------------- Phone field (iter 4) -------------------
+class TestPhone:
+    def test_booking_saves_phone_on_user_and_booking(self, api):
+        import uuid as _u
+        email = f"TEST_phone_{_u.uuid4().hex[:8]}@example.com"
+        r = api.post(f"{BASE_URL}/api/auth/register",
+                     json={"email": email, "password": "secret12", "name": "Phone User"})
+        assert r.status_code == 200
+        token = r.json()["token"]
+        bikes = api.get(f"{BASE_URL}/api/bikes").json()
+        # Find a date where M is available on bike[0]
+        bid = bikes[0]["id"]
+        chosen = None
+        for off in (3, 7, 12, 20, 27):
+            d = (datetime.date.today() + datetime.timedelta(days=off)).isoformat()
+            av = api.post(f"{BASE_URL}/api/bikes/{bid}/quote",
+                          json={"bike_id": bid, "size": "M", "date": d,
+                                "days": 1, "payment_method": "store"}).json().get("available", {})
+            if av.get("M", 0) > 0:
+                chosen = d
+                break
+        assert chosen, "no M-availability window"
+        rb = api.post(f"{BASE_URL}/api/bookings",
+                      json={"bike_id": bid, "size": "M", "date": chosen, "days": 1,
+                            "payment_method": "store", "phone": "+39 333 1234567"},
+                      headers=h(token))
+        assert rb.status_code == 200, rb.text
+        assert rb.json()["phone"] == "+39 333 1234567"
+        # /api/auth/me returns phone
+        rm = api.get(f"{BASE_URL}/api/auth/me", headers=h(token))
+        assert rm.status_code == 200
+        assert rm.json()["phone"] == "+39 333 1234567"
+        # Cleanup
+        api.post(f"{BASE_URL}/api/bookings/{rb.json()['id']}/cancel", headers=h(token))
