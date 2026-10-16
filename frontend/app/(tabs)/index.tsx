@@ -11,7 +11,7 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { api, type Bike, type Category, type Size } from "@/src/api";
 import { CATEGORY_LABELS, SIZES, SIZE_HEIGHTS, euro } from "@/src/format";
 import { Button, Chip } from "@/src/components/ui";
-import { DirectionsButton } from "@/src/components/DirectionsButton";
+import { ShopContactRow } from "@/src/components/DirectionsButton";
 import { useAuth } from "@/src/auth";
 import { usesNativeTabs } from "@/src/navigation";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -58,7 +58,7 @@ export default function CatalogScreen() {
           </Pressable>
         </View>
         <View style={styles.directions}>
-          <DirectionsButton testID="home-directions-button" />
+          <ShopContactRow prefix="home" />
         </View>
         <ScrollView
           horizontal

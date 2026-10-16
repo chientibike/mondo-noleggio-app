@@ -52,3 +52,4 @@ App scaricabile da tutti per gestire la giacenza di bici a noleggio (gravel, e-b
 - Google Sign-in (Emergent) already implemented & verified (button 'Continua con Google')
 - 'Come arrivare' button (Google Maps directions) on home + bookings headers (src/components/DirectionsButton.tsx)
 - Review request email day after return (12:00 Rome) with Google review link https://g.page/r/CRrkPKDBIM0oEBM/review
+- WhatsApp 'Scrivici' button (wa.me/393289832243) next to 'Come arrivare' on home + bookings (ShopContactRow)

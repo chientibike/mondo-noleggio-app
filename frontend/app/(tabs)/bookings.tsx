@@ -9,7 +9,7 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { api, type Booking } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Badge, Button } from "@/src/components/ui";
-import { DirectionsButton } from "@/src/components/DirectionsButton";
+import { ShopContactRow } from "@/src/components/DirectionsButton";
 import { PAYMENT_LABELS, STATUS_LABELS, euro, fmtRange, fmtUnits, statusTone } from "@/src/format";
 import { useI18n } from "@/src/i18n";
 import { startStripePayment } from "@/src/payments";
@@ -65,7 +65,7 @@ export default function BookingsScreen() {
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
       <Text style={styles.title}>{t("my_bookings")}</Text>
-      <DirectionsButton testID="bookings-directions-button" />
+      <ShopContactRow prefix="bookings" />
     </View>
   );
 
