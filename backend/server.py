@@ -441,10 +441,10 @@ async def stripe_webhook(request: Request):
 async def payment_return(cancelled: Optional[str] = None, lang: str = "it"):
     if lang == "en":
         msg = "Payment cancelled" if cancelled else "Payment completed"
-        hint = "Close this window and return to the Noleggio Nuovo app."
+        hint = "Close this window and return to the Mondo Noleggio app."
     else:
         msg = "Pagamento annullato" if cancelled else "Pagamento completato"
-        hint = "Chiudi questa finestra e torna all'app Noleggio Nuovo."
+        hint = "Chiudi questa finestra e torna all'app Mondo Noleggio."
     return f"""<html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head>
 <body style='font-family:-apple-system,sans-serif;text-align:center;padding:60px 24px;color:#121212'>
 <h2>{msg}</h2><p>{hint}</p></body></html>"""

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
+import { Image } from "expo-image";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
@@ -75,9 +76,7 @@ export default function Login() {
         <Pressable testID="login-close-button" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} style={styles.close}>
           <Ionicons name="close" size={26} color={colors.onSurface} />
         </Pressable>
-        <View style={styles.logo}>
-          <Ionicons name="bicycle" size={36} color={colors.onBrandPrimary} />
-        </View>
+        <Image source={require("@/assets/images/logo.png")} style={styles.logo} contentFit="contain" testID="login-logo" />
         <Text style={styles.title}>{mode === "login" ? t("login") : t("register_title")}</Text>
         <Text style={styles.sub}>{t("login_sub")}</Text>
 
@@ -142,7 +141,7 @@ const useStyles = makeStyles((c) => ({
   root: { flex: 1, backgroundColor: c.surface },
   content: { paddingHorizontal: 24, gap: 16 },
   close: { alignSelf: "flex-end", width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  logo: { width: 64, height: 64, borderRadius: 20, backgroundColor: c.brandPrimary, alignItems: "center", justifyContent: "center" },
+  logo: { width: 96, height: 96 },
   title: { fontSize: 30, fontWeight: "800", color: c.onSurface, letterSpacing: -0.5 },
   sub: { fontSize: 15, color: c.onSurfaceTertiary, marginTop: -8, marginBottom: 8 },
   orRow: { flexDirection: "row", alignItems: "center", gap: 12 },

@@ -1,4 +1,4 @@
-# Noleggio Nuovo – PRD
+# Mondo Noleggio (ChientiBike) – PRD
 
 ## Problema originale
 App scaricabile da tutti per gestire la giacenza di bici a noleggio (gravel, e-bike, gravel muscolari): vedere disponibilità, prenotare per giorno/ora o più giorni, pagare. Ogni bici ha taglie S/M/L/XL in base all'altezza. App interamente in italiano.
@@ -32,6 +32,8 @@ App scaricabile da tutti per gestire la giacenza di bici a noleggio (gravel, e-b
 - Flotta reale: Raymon Soreno Comp (Gravel 40€), Raymon Norza Comp (E-gravel 50€), Raymon Vamok Comp (E-bike MTB Bosch 60€) con foto ufficiali e schede tecniche; quantità per taglia da confermare
 - Sync foglio → app (sola lettura, ogni 2 min + pulsante "Sincronizza" in admin): stock per taglia dalla tabella flotta (16 unità EG/GR/EB), noleggi dal "Registro storico noleggi" importati come prenotazioni (source=sheet) che bloccano la disponibilità. File: backend/sheet_sync.py, env SHEET_ID/SHEET_GID
 - In attesa: scrittura app → foglio (serve OAuth Google Client ID/Secret)
+
+- App rinominata "Mondo Noleggio"; logo E-BIKE 4 ENDURO (ChientiBike) su icona, splash, favicon, header catalogo e login
 
 ## Backlog
 - P0: Import/sync bici dal foglio Google "modulo noleggio" (serve accesso pubblico funzionante o file .csv/.xlsx)

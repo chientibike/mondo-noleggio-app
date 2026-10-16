@@ -43,8 +43,9 @@ export default function CatalogScreen() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.titleRow}>
+          <Image source={require("@/assets/images/logo.png")} style={styles.logo} contentFit="contain" testID="app-logo" />
           <View style={{ flex: 1 }}>
-            <Text style={styles.kicker}>Noleggio Nuovo</Text>
+            <Text style={styles.kicker}>Mondo Noleggio</Text>
             <Text style={styles.title} testID="catalog-title">{t("choose_bike")}</Text>
           </View>
           <Pressable testID="header-profile-button" onPress={() => router.push(user ? "/profile" : "/login")} style={styles.avatar}>
@@ -163,7 +164,8 @@ function BikeCard({ bike, index, onPress }: { bike: Bike; index: number; onPress
 const useStyles = makeStyles((c) => ({
   root: { flex: 1, backgroundColor: c.surface },
   header: { backgroundColor: c.surface, borderBottomWidth: 0.5, borderBottomColor: c.border },
-  titleRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 24, marginBottom: 8 },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 24, marginBottom: 8 },
+  logo: { width: 52, height: 52 },
   kicker: { fontSize: 12, fontWeight: "700", color: c.brand, letterSpacing: 1.2, textTransform: "uppercase" },
   title: { fontSize: 28, fontWeight: "800", color: c.onSurface, letterSpacing: -0.5 },
   avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.brandSecondary, alignItems: "center", justifyContent: "center", overflow: "hidden" },
