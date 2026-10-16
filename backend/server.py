@@ -1,0 +1,556 @@
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, Query
+from fastapi.responses import HTMLResponse
+from dotenv import load_dotenv
+from starlette.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+import os
+import logging
+import uuid
+from pathlib import Path
+from pydantic import BaseModel, Field
+from typing import List, Optional, Literal, Dict
+from datetime import datetime, timezone, timedelta, date as date_cls
+import bcrypt
+import jwt
+import httpx
+from emergentintegrations.payments.stripe.checkout import (
+    StripeCheckout, CheckoutSessionRequest,
+)
+
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
+mongo_url = os.environ['MONGO_URL']
+client = AsyncIOMotorClient(mongo_url)
+db = client[os.environ['DB_NAME']]
+
+JWT_SECRET = os.environ['JWT_SECRET']
+JWT_ALG = "HS256"
+TOKEN_DAYS = 7
+STRIPE_API_KEY = os.environ['STRIPE_API_KEY']
+
+SIZES = ["S", "M", "L", "XL"]
+SIZE_HEIGHTS = {"S": "155-165 cm", "M": "165-175 cm", "L": "175-185 cm", "XL": "185-195 cm"}
+CATEGORIES = ["gravel", "ebike", "gravel_muscolare"]
+OPEN_HOUR = 9
+CLOSE_HOUR = 19
+
+app = FastAPI()
+
+
+@app.get("/health", include_in_schema=False)
+@app.head("/health", include_in_schema=False)
+async def health():
+    return {"status": "ok"}
+
+
+api = APIRouter(prefix="/api")
+logger = logging.getLogger(__name__)
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def new_id() -> str:
+    return uuid.uuid4().hex
+
+
+# ---------------- Models ----------------
+class UserPublic(BaseModel):
+    id: str
+    email: str
+    name: str
+    role: str
+    picture: Optional[str] = None
+
+
+class RegisterIn(BaseModel):
+    email: str
+    password: str = Field(min_length=6, max_length=200)
+    name: str = Field(min_length=1, max_length=80)
+
+
+class LoginIn(BaseModel):
+    email: str
+    password: str
+
+
+class SessionIn(BaseModel):
+    session_id: str
+
+
+class Bike(BaseModel):
+    id: str = Field(default_factory=new_id)
+    name: str
+    category: Literal["gravel", "ebike", "gravel_muscolare"]
+    description: str = ""
+    image_url: str = ""
+    price_hour: float
+    price_day: float
+    stock: Dict[str, int] = Field(default_factory=lambda: {s: 0 for s in SIZES})
+    created_at: str = Field(default_factory=now_iso)
+
+
+class BikeIn(BaseModel):
+    name: str = Field(min_length=1)
+    category: Literal["gravel", "ebike", "gravel_muscolare"]
+    description: str = ""
+    image_url: str = ""
+    price_hour: float = Field(gt=0)
+    price_day: float = Field(gt=0)
+    stock: Dict[str, int]
+
+
+class Booking(BaseModel):
+    id: str = Field(default_factory=new_id)
+    user_id: str
+    user_email: str
+    user_name: str
+    bike_id: str
+    bike_name: str
+    bike_image: str = ""
+    size: str
+    mode: Literal["hourly", "daily"]
+    start: str  # local "YYYY-MM-DDTHH:MM"
+    end: str
+    units: int
+    total: float
+    payment_method: Literal["stripe", "store"]
+    payment_status: Literal["pending", "paid", "to_pay_in_store", "failed"]
+    status: Literal["pending_payment", "confirmed", "cancelled", "completed"]
+    stripe_session_id: Optional[str] = None
+    created_at: str = Field(default_factory=now_iso)
+
+
+class BookingIn(BaseModel):
+    bike_id: str
+    size: Literal["S", "M", "L", "XL"]
+    mode: Literal["hourly", "daily"]
+    date: str  # YYYY-MM-DD
+    start_hour: Optional[int] = None
+    hours: Optional[int] = None
+    days: Optional[int] = None
+    payment_method: Literal["stripe", "store"]
+
+
+class CheckoutIn(BaseModel):
+    booking_id: str
+    return_url: str
+
+
+class AdminBookingPatch(BaseModel):
+    status: Optional[Literal["pending_payment", "confirmed", "cancelled", "completed"]] = None
+    payment_status: Optional[Literal["pending", "paid", "to_pay_in_store", "failed"]] = None
+
+
+# ---------------- Auth helpers ----------------
+def hash_pw(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+
+
+def verify_pw(pw: str, h: str) -> bool:
+    try:
+        return bcrypt.checkpw(pw.encode(), h.encode())
+    except Exception:
+        return False
+
+
+def make_token(user_id: str) -> str:
+    now = datetime.now(timezone.utc)
+    return jwt.encode({"sub": user_id, "iat": now, "exp": now + timedelta(days=TOKEN_DAYS)}, JWT_SECRET, algorithm=JWT_ALG)
+
+
+def to_public(u: dict) -> UserPublic:
+    return UserPublic(id=u["id"], email=u["email"], name=u.get("name") or u["email"].split("@")[0],
+                      role=u.get("role", "user"), picture=u.get("picture"))
+
+
+async def current_user(request: Request) -> dict:
+    auth = request.headers.get("Authorization", "")
+    if not auth.lower().startswith("bearer "):
+        raise HTTPException(401, "Non autenticato")
+    try:
+        payload = jwt.decode(auth[7:], JWT_SECRET, algorithms=[JWT_ALG])
+    except jwt.InvalidTokenError:
+        raise HTTPException(401, "Sessione scaduta")
+    user = await db.users.find_one({"id": payload.get("sub")}, {"_id": 0})
+    if not user:
+        raise HTTPException(401, "Utente non trovato")
+    return user
+
+
+async def admin_user(user: dict = Depends(current_user)) -> dict:
+    if user.get("role") != "admin":
+        raise HTTPException(403, "Solo amministratori")
+    return user
+
+
+# ---------------- Auth routes ----------------
+@api.post("/auth/register")
+async def register(body: RegisterIn):
+    email = body.email.strip().lower()
+    if "@" not in email:
+        raise HTTPException(422, "Email non valida")
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(409, "Email già registrata")
+    user = {"id": new_id(), "email": email, "name": body.name.strip(), "role": "user",
+            "password_hash": hash_pw(body.password), "created_at": now_iso()}
+    await db.users.insert_one(user)
+    return {"token": make_token(user["id"]), "user": to_public(user)}
+
+
+@api.post("/auth/login")
+async def login(body: LoginIn):
+    email = body.email.strip().lower()
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    if not user or not user.get("password_hash") or not verify_pw(body.password, user["password_hash"]):
+        raise HTTPException(401, "Email o password errati")
+    return {"token": make_token(user["id"]), "user": to_public(user)}
+
+
+@api.post("/auth/session")
+async def google_session(body: SessionIn):
+    async with httpx.AsyncClient(timeout=15) as c:
+        r = await c.get("https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                        headers={"X-Session-ID": body.session_id})
+    if r.status_code != 200:
+        raise HTTPException(401, "Sessione Google non valida")
+    data = r.json()
+    email = data["email"].strip().lower()
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    if user:
+        await db.users.update_one({"id": user["id"]}, {"$set": {"picture": data.get("picture"),
+                                                                 "name": user.get("name") or data.get("name")}})
+        user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    else:
+        user = {"id": new_id(), "email": email, "name": data.get("name") or email.split("@")[0],
+                "picture": data.get("picture"), "role": "user", "created_at": now_iso()}
+        await db.users.insert_one(user)
+        user.pop("_id", None)
+    return {"session_token": make_token(user["id"]), "user": to_public(user)}
+
+
+@api.get("/auth/me", response_model=UserPublic)
+async def me(user: dict = Depends(current_user)):
+    return to_public(user)
+
+
+# ---------------- Availability ----------------
+def parse_range(body: BookingIn) -> tuple[str, str, int]:
+    try:
+        d = date_cls.fromisoformat(body.date)
+    except ValueError:
+        raise HTTPException(422, "Data non valida")
+    if d < datetime.now().date():
+        raise HTTPException(422, "Non puoi prenotare nel passato")
+    if body.mode == "hourly":
+        if body.start_hour is None or not body.hours:
+            raise HTTPException(422, "Indica ora di inizio e durata")
+        if body.start_hour < OPEN_HOUR or body.start_hour + body.hours > CLOSE_HOUR or body.hours < 1:
+            raise HTTPException(422, f"Orario disponibile {OPEN_HOUR}:00-{CLOSE_HOUR}:00")
+        start = f"{d.isoformat()}T{body.start_hour:02d}:00"
+        end = f"{d.isoformat()}T{body.start_hour + body.hours:02d}:00"
+        return start, end, body.hours
+    days = body.days or 1
+    if days < 1 or days > 30:
+        raise HTTPException(422, "Durata tra 1 e 30 giorni")
+    end_d = d + timedelta(days=days - 1)
+    return f"{d.isoformat()}T{OPEN_HOUR:02d}:00", f"{end_d.isoformat()}T{CLOSE_HOUR:02d}:00", days
+
+
+async def booked_counts(bike_id: str, start: str, end: str) -> Dict[str, int]:
+    counts = {s: 0 for s in SIZES}
+    cursor = db.bookings.find({"bike_id": bike_id, "status": {"$in": ["pending_payment", "confirmed"]},
+                               "start": {"$lt": end}, "end": {"$gt": start}}, {"_id": 0, "size": 1})
+    async for b in cursor:
+        counts[b["size"]] = counts.get(b["size"], 0) + 1
+    return counts
+
+
+async def availability(bike: dict, start: Optional[str], end: Optional[str]) -> Dict[str, int]:
+    stock = {s: int(bike.get("stock", {}).get(s, 0)) for s in SIZES}
+    if not start or not end:
+        return stock
+    used = await booked_counts(bike["id"], start, end)
+    return {s: max(0, stock[s] - used[s]) for s in SIZES}
+
+
+@api.get("/meta")
+async def meta():
+    return {"sizes": SIZES, "size_heights": SIZE_HEIGHTS, "categories": CATEGORIES,
+            "open_hour": OPEN_HOUR, "close_hour": CLOSE_HOUR, "currency": "EUR"}
+
+
+@api.get("/bikes")
+async def list_bikes(category: Optional[str] = None, size: Optional[str] = None,
+                     start: Optional[str] = None, end: Optional[str] = None):
+    q = {"category": category} if category else {}
+    bikes = await db.bikes.find(q, {"_id": 0}).sort("created_at", 1).to_list(500)
+    out = []
+    for b in bikes:
+        bike = Bike(**b).model_dump()
+        bike["available"] = await availability(b, start, end)
+        if size and bike["available"].get(size, 0) <= 0 and not start:
+            continue
+        if size and start and bike["available"].get(size, 0) <= 0:
+            continue
+        out.append(bike)
+    return out
+
+
+@api.get("/bikes/{bike_id}")
+async def get_bike(bike_id: str, start: Optional[str] = None, end: Optional[str] = None):
+    b = await db.bikes.find_one({"id": bike_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(404, "Bici non trovata")
+    bike = Bike(**b).model_dump()
+    bike["available"] = await availability(b, start, end)
+    return bike
+
+
+@api.post("/bikes/{bike_id}/quote")
+async def quote(bike_id: str, body: BookingIn):
+    b = await db.bikes.find_one({"id": bike_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(404, "Bici non trovata")
+    start, end, units = parse_range(body)
+    avail = await availability(b, start, end)
+    price = b["price_hour"] if body.mode == "hourly" else b["price_day"]
+    return {"start": start, "end": end, "units": units, "total": round(price * units, 2), "available": avail}
+
+
+# ---------------- Bookings ----------------
+@api.post("/bookings")
+async def create_booking(body: BookingIn, user: dict = Depends(current_user)):
+    b = await db.bikes.find_one({"id": body.bike_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(404, "Bici non trovata")
+    start, end, units = parse_range(body)
+    avail = await availability(b, start, end)
+    if avail.get(body.size, 0) <= 0:
+        raise HTTPException(409, f"Taglia {body.size} non disponibile per il periodo scelto")
+    price = b["price_hour"] if body.mode == "hourly" else b["price_day"]
+    booking = Booking(
+        user_id=user["id"], user_email=user["email"], user_name=user.get("name") or user["email"],
+        bike_id=b["id"], bike_name=b["name"], bike_image=b.get("image_url", ""), size=body.size,
+        mode=body.mode, start=start, end=end, units=units, total=round(price * units, 2),
+        payment_method=body.payment_method,
+        payment_status="pending" if body.payment_method == "stripe" else "to_pay_in_store",
+        status="pending_payment" if body.payment_method == "stripe" else "confirmed",
+    )
+    await db.bookings.insert_one(booking.model_dump())
+    return booking
+
+
+@api.get("/bookings/me", response_model=List[Booking])
+async def my_bookings(user: dict = Depends(current_user)):
+    docs = await db.bookings.find({"user_id": user["id"]}, {"_id": 0}).sort("start", -1).to_list(500)
+    return [Booking(**d) for d in docs]
+
+
+@api.post("/bookings/{booking_id}/cancel", response_model=Booking)
+async def cancel_booking(booking_id: str, user: dict = Depends(current_user)):
+    bk = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not bk or (bk["user_id"] != user["id"] and user.get("role") != "admin"):
+        raise HTTPException(404, "Prenotazione non trovata")
+    if bk["status"] in ("cancelled", "completed"):
+        raise HTTPException(409, "Prenotazione non annullabile")
+    await db.bookings.update_one({"id": booking_id}, {"$set": {"status": "cancelled"}})
+    bk["status"] = "cancelled"
+    return Booking(**bk)
+
+
+# ---------------- Stripe ----------------
+def stripe_client(request: Request) -> StripeCheckout:
+    host = str(request.base_url).rstrip("/")
+    return StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=f"{host}/api/webhook/stripe")
+
+
+@api.post("/payments/stripe/checkout")
+async def stripe_checkout(body: CheckoutIn, request: Request, user: dict = Depends(current_user)):
+    bk = await db.bookings.find_one({"id": body.booking_id, "user_id": user["id"]}, {"_id": 0})
+    if not bk:
+        raise HTTPException(404, "Prenotazione non trovata")
+    if bk["payment_status"] == "paid" or bk["status"] == "cancelled":
+        raise HTTPException(409, "Prenotazione non pagabile")
+    sep = "&" if "?" in body.return_url else "?"
+    success = f"{body.return_url}{sep}session_id={{CHECKOUT_SESSION_ID}}&booking_id={bk['id']}"
+    cancel = f"{body.return_url}{sep}cancelled=1&booking_id={bk['id']}"
+    sc = stripe_client(request)
+    session = await sc.create_checkout_session(CheckoutSessionRequest(
+        amount=float(bk["total"]), currency="eur", success_url=success, cancel_url=cancel,
+        metadata={"booking_id": bk["id"], "user_id": user["id"]},
+    ))
+    await db.payment_transactions.insert_one({
+        "id": new_id(), "session_id": session.session_id, "booking_id": bk["id"], "user_id": user["id"],
+        "amount": float(bk["total"]), "currency": "eur", "payment_status": "initiated", "created_at": now_iso(),
+    })
+    await db.bookings.update_one({"id": bk["id"]}, {"$set": {"stripe_session_id": session.session_id}})
+    return {"url": session.url, "session_id": session.session_id}
+
+
+async def apply_payment(session_id: str, payment_status: str, status: str):
+    tx = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+    if not tx:
+        return
+    if tx["payment_status"] == "paid":
+        return
+    await db.payment_transactions.update_one({"session_id": session_id},
+                                             {"$set": {"payment_status": payment_status, "status": status}})
+    if payment_status == "paid":
+        await db.bookings.update_one({"id": tx["booking_id"]},
+                                     {"$set": {"payment_status": "paid", "status": "confirmed"}})
+    elif status == "expired":
+        await db.bookings.update_one({"id": tx["booking_id"], "payment_status": {"$ne": "paid"}},
+                                     {"$set": {"payment_status": "failed", "status": "cancelled"}})
+
+
+@api.get("/payments/stripe/status/{session_id}")
+async def stripe_status(session_id: str, request: Request, user: dict = Depends(current_user)):
+    tx = await db.payment_transactions.find_one({"session_id": session_id, "user_id": user["id"]}, {"_id": 0})
+    if not tx:
+        raise HTTPException(404, "Pagamento non trovato")
+    st = await stripe_client(request).get_checkout_status(session_id)
+    await apply_payment(session_id, st.payment_status, st.status)
+    bk = await db.bookings.find_one({"id": tx["booking_id"]}, {"_id": 0})
+    return {"payment_status": st.payment_status, "status": st.status, "booking": Booking(**bk)}
+
+
+@api.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    payload = await request.body()
+    try:
+        ev = await stripe_client(request).handle_webhook(payload, request.headers.get("Stripe-Signature"))
+    except Exception as e:
+        logger.warning("Stripe webhook error: %s", e)
+        raise HTTPException(400, "Webhook non valido")
+    if ev.session_id:
+        await apply_payment(ev.session_id, ev.payment_status or "", "complete" if ev.payment_status == "paid" else "")
+    return {"received": True}
+
+
+@api.get("/payments/return", response_class=HTMLResponse)
+async def payment_return(cancelled: Optional[str] = None):
+    msg = "Pagamento annullato" if cancelled else "Pagamento completato"
+    return f"""<html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head>
+<body style='font-family:-apple-system,sans-serif;text-align:center;padding:60px 24px;color:#121212'>
+<h2>{msg}</h2><p>Chiudi questa finestra e torna all'app Noleggio Nuovo.</p></body></html>"""
+
+
+# ---------------- Admin ----------------
+@api.get("/admin/bookings", response_model=List[Booking])
+async def admin_bookings(status: Optional[str] = None, _: dict = Depends(admin_user)):
+    q = {"status": status} if status else {}
+    docs = await db.bookings.find(q, {"_id": 0}).sort("start", -1).to_list(1000)
+    return [Booking(**d) for d in docs]
+
+
+@api.patch("/admin/bookings/{booking_id}", response_model=Booking)
+async def admin_patch_booking(booking_id: str, body: AdminBookingPatch, _: dict = Depends(admin_user)):
+    upd = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not upd:
+        raise HTTPException(422, "Nessuna modifica")
+    res = await db.bookings.find_one_and_update({"id": booking_id}, {"$set": upd}, projection={"_id": 0},
+                                                return_document=True)
+    if not res:
+        raise HTTPException(404, "Prenotazione non trovata")
+    return Booking(**res)
+
+
+@api.get("/admin/stats")
+async def admin_stats(_: dict = Depends(admin_user)):
+    today = datetime.now().date().isoformat()
+    bikes = await db.bikes.find({}, {"_id": 0, "stock": 1}).to_list(500)
+    total_units = sum(sum(int(v) for v in b.get("stock", {}).values()) for b in bikes)
+    active = await db.bookings.count_documents({"status": {"$in": ["confirmed", "pending_payment"]}})
+    today_count = await db.bookings.count_documents({"status": {"$in": ["confirmed", "pending_payment"]},
+                                                     "start": {"$lte": f"{today}T23:59"}, "end": {"$gte": f"{today}T00:00"}})
+    paid = await db.bookings.find({"payment_status": "paid"}, {"_id": 0, "total": 1}).to_list(5000)
+    return {"bike_models": len(bikes), "total_units": total_units, "active_bookings": active,
+            "today_bookings": today_count, "revenue_paid": round(sum(p["total"] for p in paid), 2)}
+
+
+def clean_stock(stock: Dict[str, int]) -> Dict[str, int]:
+    return {s: max(0, int(stock.get(s, 0))) for s in SIZES}
+
+
+@api.post("/admin/bikes", response_model=Bike)
+async def admin_create_bike(body: BikeIn, _: dict = Depends(admin_user)):
+    bike = Bike(**{**body.model_dump(), "stock": clean_stock(body.stock)})
+    await db.bikes.insert_one(bike.model_dump())
+    return bike
+
+
+@api.put("/admin/bikes/{bike_id}", response_model=Bike)
+async def admin_update_bike(bike_id: str, body: BikeIn, _: dict = Depends(admin_user)):
+    upd = {**body.model_dump(), "stock": clean_stock(body.stock)}
+    res = await db.bikes.find_one_and_update({"id": bike_id}, {"$set": upd}, projection={"_id": 0},
+                                             return_document=True)
+    if not res:
+        raise HTTPException(404, "Bici non trovata")
+    return Bike(**res)
+
+
+@api.delete("/admin/bikes/{bike_id}")
+async def admin_delete_bike(bike_id: str, _: dict = Depends(admin_user)):
+    res = await db.bikes.delete_one({"id": bike_id})
+    if not res.deleted_count:
+        raise HTTPException(404, "Bici non trovata")
+    return {"ok": True}
+
+
+# ---------------- Startup / seed ----------------
+SEED_BIKES = [
+    {"name": "Bianchi Arcadex GRX", "category": "gravel", "price_hour": 8, "price_day": 35,
+     "description": "Gravel leggera in alluminio, Shimano GRX 2x11. Perfetta per strade bianche e sterrati.",
+     "image_url": "https://images.pexels.com/photos/33199511/pexels-photo-33199511.jpeg?auto=compress&cs=tinysrgb&w=940",
+     "stock": {"S": 2, "M": 3, "L": 3, "XL": 1}},
+    {"name": "Specialized Turbo Creo", "category": "ebike", "price_hour": 15, "price_day": 60,
+     "description": "E-gravel con motore SL e autonomia fino a 120 km. Salite senza fatica.",
+     "image_url": "https://images.pexels.com/photos/16435192/pexels-photo-16435192.jpeg?auto=compress&cs=tinysrgb&w=940",
+     "stock": {"S": 1, "M": 2, "L": 2, "XL": 1}},
+    {"name": "Cannondale Topstone 2", "category": "gravel_muscolare", "price_hour": 7, "price_day": 30,
+     "description": "Gravel muscolare robusta e versatile, ideale per giri lunghi in campagna.",
+     "image_url": "https://images.pexels.com/photos/12266469/pexels-photo-12266469.jpeg?auto=compress&cs=tinysrgb&w=940",
+     "stock": {"S": 2, "M": 2, "L": 2, "XL": 2}},
+    {"name": "Orbea Vibe H30", "category": "ebike", "price_hour": 12, "price_day": 50,
+     "description": "E-bike urbana e trekking, comoda e facile per tutti.",
+     "image_url": "https://images.pexels.com/photos/13799226/pexels-photo-13799226.jpeg?auto=compress&cs=tinysrgb&w=940",
+     "stock": {"S": 1, "M": 1, "L": 1, "XL": 0}},
+]
+
+
+@app.on_event("startup")
+async def startup():
+    await db.users.create_index("email", unique=True)
+    await db.users.create_index("id", unique=True)
+    await db.bikes.create_index("id", unique=True)
+    await db.bookings.create_index("id", unique=True)
+    await db.bookings.create_index([("bike_id", 1), ("start", 1)])
+    await db.payment_transactions.create_index("session_id", unique=True)
+    email = os.environ["ADMIN_EMAIL"].strip().lower()
+    await db.users.update_one({"email": email}, {"$setOnInsert": {
+        "id": new_id(), "email": email, "name": "Admin", "role": "admin",
+        "password_hash": hash_pw(os.environ["ADMIN_PASSWORD"]), "created_at": now_iso()}}, upsert=True)
+    if await db.bikes.count_documents({}) == 0:
+        for b in SEED_BIKES:
+            await db.bikes.insert_one(Bike(**b).model_dump())
+
+
+app.include_router(api)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    client.close()

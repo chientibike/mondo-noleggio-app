@@ -1,0 +1,41 @@
+{
+  "summary": "First iteration test of Noleggio Nuovo (Italian bike rental, Expo+FastAPI+Mongo). Backend: 25/25 pytest tests PASSED covering auth (register/login/me/duplicate/bad creds), meta, bikes list/detail/filter/quote/past-date/outside-hours, bookings (store+hourly+daily, auth required, stock exhaustion -> 409, cancel + 409 on re-cancel), Stripe checkout session creation + status, admin stats/bookings list+filter/patch, admin bike CRUD + 403 for normal user. Frontend: catalog loads with 4 seeded bikes, category/size chips filter correctly, bike detail opens, guest 'Prenota ora' redirects to /login (PASS), store checkout flow completes to payment-result (PASS from first run - confirmed booking visible in Prenotazioni), admin area accessible only to admin, admin stats show 26 units/active=6/revenue, admin bike list with Modifica/Elimina + 'Aggiungi bici' FAB, admin booking tab switch works. Italian copy verified throughout. UX issue: after login from book-now flow user is returned to bike detail instead of auto-forwarded to checkout.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "bike/[id].tsx + login.tsx", "issue": "After unauthenticated user taps 'Prenota ora' then logs in, user is navigated back to bike detail (router.canGoBack->back) rather than auto-continuing to /checkout. User must tap 'Prenota ora' a second time. Minor UX friction, intent is lost.", "testID": "book-now-button", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "bike/[id].tsx (daily mode)", "issues": ["On 390x844 viewport the TAGLIA size cards sit below the fold when 'Giornata / più giorni' mode is active (hero + description + mode + GIORNO + DAL GIORNO + NUMERO DI GIORNI pushes TAGLIA offscreen). The CTA label correctly becomes 'Scegli la taglia' hinting to scroll, but it is not visually obvious. Consider auto-scrolling to TAGLIA when CTA is tapped without a size, or collapsing description."]}
+    ],
+    "react_native_issues": [
+      {"component": "global styles (several screens)", "issue": "React Native Web deprecation warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Appears repeatedly. Reference: multiple style definitions using shadowColor/shadowOffset/shadowOpacity/shadowRadius."},
+      {"component": "unknown", "issue": "React Native Web deprecation warning: 'props.pointerEvents is deprecated. Use style.pointerEvents' - triggered after login navigation. Likely from a Modal/overlay (e.g., toast/modal in src/toast.tsx or confirm modal in bookings.tsx)."}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_backend.py", "/app/backend/tests/conftest.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Preserve post-login intent: in login screen or auth store, when login is reached from 'Prenota ora', after successful auth navigate to /checkout with the pending booking params (currently it goes back to /bike/[id]).",
+    "Migrate shadowColor/shadowOffset/shadowOpacity/shadowRadius to the new boxShadow API (or Platform.select) to silence RN Web deprecation warnings.",
+    "Replace deprecated pointerEvents prop with style.pointerEvents in whichever component triggers it (likely overlay/modal).",
+    "Optional: On book-now with no size selected in daily mode, auto-scroll to the TAGLIA section for better discoverability."
+  ],
+  "critical_code_review_comments": [
+    "server.py parse_range() uses datetime.now().date() (naive, server timezone) to compare with user-provided local date; while acceptable, consider documenting that 'date' is in Europe/Rome local time to avoid edge cases at midnight.",
+    "Admin seed is idempotent via $setOnInsert (good). Bike seeding runs only when collection is empty (good).",
+    "booked_counts projection excludes _id and selects size (good). Availability subtraction correctly clamped at 0.",
+    "StripeCheckout uses emergentintegrations (as expected); session URL returned contains 'stripe.com' confirming real test session (verified via backend test)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/__init__.py (new)",
+    "/app/backend/tests/conftest.py (new)",
+    "/app/backend/tests/test_backend.py (new - 25 tests)"
+  ],
+  "success_rate": {"backend": "100% (25/25)", "frontend": "~95% - all flows verified; one UX issue (post-login redirect) + RN Web deprecation warnings"},
+  "seed_data_creation": "Backend startup seeds 4 bikes and admin user (idempotent). Tests create TEST_user_* accounts via register and TEST_Bike entries that are cleaned up (delete) within the admin CRUD test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend URL env var is EXPO_PUBLIC_BACKEND_URL (not EXPO_BACKEND_URL). Admin creds in /app/memory/test_credentials.md. Reuse /app/backend/tests/test_backend.py as regression. Mobile viewport is 390x844. testIDs are complete across all screens.",
+  "rca_of_issue": "Post-login UX friction RCA: /app/frontend/app/login.tsx line 73 uses router.canGoBack() ? router.back() : router.replace('/'). When book-now triggers router.push('/login'), after a successful submit the login screen calls router.replace('/') (or similar) which pops back to /bike/[id] rather than forwarding to /checkout. Fix: pass a return/redirect param (e.g., router.push({pathname:'/login', params:{redirect:'/checkout', ...bookingDraft}})) and after login navigate to that path with the pre-selected booking state."
+}

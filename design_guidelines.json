@@ -1,0 +1,159 @@
+{
+  "app_name": "Noleggio Nuovo",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "Clean, authoritative, and focused entirely on the outdoor rental experience, letting the bikes and imagery take center stage.",
+  "color": {
+    "surface": "#FFFFFF",
+    "onSurface": "#121212",
+    "surfaceSecondary": "#F5F5F7",
+    "onSurfaceSecondary": "#1C1C1E",
+    "surfaceTertiary": "#E5E5EA",
+    "onSurfaceTertiary": "#2C2C2E",
+    "surfaceInverse": "#1C1C1E",
+    "onSurfaceInverse": "#FFFFFF",
+    "muted": "#8E8E93",
+    "brand": "#546E5A",
+    "onBrand": "#FFFFFF",
+    "brandPrimary": "#3E5343",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#E1EBE4",
+    "onBrandSecondary": "#283A2C",
+    "brandTertiary": "#F0F5F2",
+    "onBrandTertiary": "#3E5343",
+    "success": "#34C759",
+    "onSuccess": "#FFFFFF",
+    "warning": "#FF9F0A",
+    "onWarning": "#FFFFFF",
+    "error": "#FF3B30",
+    "onError": "#FFFFFF",
+    "info": "#007AFF",
+    "onInfo": "#FFFFFF",
+    "border": "#E5E5EA",
+    "borderStrong": "#C7C7CC",
+    "divider": "#D1D1D6"
+  },
+  "typography": {
+    "displayFontFamily": "System",
+    "textFontFamily": "System",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous spacing. Use safe-area for every top-level screen. Use 'md' (12px) or 'lg' (16px) for card padding, 'xl' (24px) for screen margins.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "1",
+  "navigation": "bottom_tabs",
+  "icon_set": "Ionicons",
+  "glassmorphism": {
+    "enabled": "true",
+    "do's": [
+      "Use on sticky bottom CTA bars (e.g., booking confirmation bar)",
+      "Use on bottom tab bar",
+      "Use on sticky headers over scrolling content"
+    ],
+    "dont's": [
+      "Do not use on generic form fields or regular list items",
+      "Do not overdo on cards"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-blur",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Home / Catalog",
+      "purpose": "Discover and browse available bikes by category.",
+      "states": {
+        "loading": "Centered spinner with 'Caricamento bici...'",
+        "empty": "Illustration/Icon with 'Nessuna bici trovata' and 'Ricarica' button.",
+        "error": "Error message with 'Riprova' button."
+      },
+      "layout": "Header with 'Noleggio Nuovo' and User avatar. Horizontal scroll for categories (Tutte, Gravel, E-bike, Gravel muscolare). Vertical list of bike cards. Each card: edge-to-edge image in a rounded container, name, tags for size (S/M/L/XL), and price per hour/day."
+    },
+    {
+      "name": "Bike Detail & Booking",
+      "purpose": "View bike details, select size, date, time slot, and book.",
+      "states": {
+        "loading": "Skeleton of image and title.",
+        "empty": "N/A",
+        "error": "Error message with 'Torna indietro' button."
+      },
+      "layout": "Large hero image with gradient-to-dark scrim. Scrollable content: Bike Name, Category, Description. Size Selector: Segmented controls (S, M, L, XL) showing height ranges (e.g., 'S: 155-165cm'). Date/Time picker. Sticky bottom CTA 'Prenota Ora' using glassmorphism."
+    },
+    {
+      "name": "Payment / Checkout",
+      "purpose": "Confirm booking details and choose payment method.",
+      "states": {
+        "loading": "Processing payment spinner.",
+        "empty": "N/A",
+        "error": "Payment failed state with Retry button."
+      },
+      "layout": "Summary card of the booking (Bike, Dates, Total). Payment options: 'Paga ora (Stripe)' or 'Paga in negozio'. Bottom sticky CTA 'Conferma prenotazione'."
+    },
+    {
+      "name": "Admin Dashboard",
+      "purpose": "Manage bikes and view bookings.",
+      "states": {
+        "loading": "Spinner",
+        "empty": "Nessuna prenotazione o bici.",
+        "error": "Riprova."
+      },
+      "layout": "Tabs or segmented control for 'Bici' and 'Prenotazioni'. List views for easy management. FAB to add new bike."
+    }
+  ],
+  "images": {
+    "hero_gravel": {
+      "url": "https://images.pexels.com/photos/33199511/pexels-photo-33199511.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Gravel bike on forest trail"
+    },
+    "hero_ebike": {
+      "url": "https://images.pexels.com/photos/16435192/pexels-photo-16435192.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Electric bicycle leaning against wall"
+    },
+    "category_gravel": {
+      "url": "https://images.pexels.com/photos/12266469/pexels-photo-12266469.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Two cyclists on gravel bikes"
+    },
+    "onboarding_or_hero": {
+      "url": "https://images.pexels.com/photos/13799226/pexels-photo-13799226.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Cyclist riding a road bike through a forest"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the color palette provided. Do not use any blues, purples, or unlisted colors.",
+    "Implement the 'iOS-Native Clean' personality: prioritize typography, high-quality images, and whitespace. Do not clutter the UI.",
+    "For all primary CTAs, use 'brandPrimary' with 'onBrandPrimary' text. Ensure they are sticky at the bottom with a safe-area clearance.",
+    "When displaying images as headers or cards with text overlays, you MUST apply a vertical gradient scrim (transparent to surfaceInverse) to guarantee readability.",
+    "For the size selector, use rounded segmented controls or chips clearly showing S, M, L, XL with their corresponding height ranges.",
+    "Use Ionicons. Keep icons consistent (either all outlined or all filled, except in the tab bar where active is filled and inactive is outlined).",
+    "Ensure glassmorphism (via expo-blur) is used on the sticky bottom booking bar and bottom tab bar, over a tinted background for clarity.",
+    "Add haptics (via expo-haptics) to all primary button presses, tab switches, and segmented control selections."
+  ]
+}
