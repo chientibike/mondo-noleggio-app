@@ -29,7 +29,7 @@ App scaricabile da tutti per gestire la giacenza di bici a noleggio (gravel, e-b
 - Solo noleggio giornaliero / più giorni (ritiro 9:00, riconsegna 19:00); noleggio a ore rimosso
 - Categorie e prezzi: Gravel 40€, E-gravel 50€, E-bike MTB 60€ al giorno (prezzo auto nel form admin)
 - Ogni bici: foto coerente, caratteristiche (telaio, motore, batteria, autonomia, escursione, cambio, freni, ruote, peso) e descrizione IT/EN, modificabili dall'admin
-- Flotta reale: Raymon Soreno Comp (Gravel 40€), Raymon Norza Comp (E-gravel 50€), Raymon Vamok Comp (E-bike MTB Bosch 60€) con foto ufficiali e schede tecniche; quantità per taglia da confermare
+- Flotta reale: Raymon Soreno Comp (Gravel 40€), Raymon Norza Comp (E-gravel 50€), Raymon Vamok Pro (E-bike MTB Bosch CX 120 Nm, 800 Wh, 60€) con foto ufficiali e schede tecniche; quantità per taglia da confermare
 - Sync foglio → app (sola lettura, ogni 2 min + pulsante "Sincronizza" in admin): stock per taglia dalla tabella flotta (16 unità EG/GR/EB), noleggi dal "Registro storico noleggi" importati come prenotazioni (source=sheet) che bloccano la disponibilità. File: backend/sheet_sync.py, env SHEET_ID/SHEET_GID
 - In attesa: scrittura app → foglio (serve OAuth Google Client ID/Secret)
 

@@ -558,15 +558,16 @@ SEED_BIKES = [
                "brakes": "Shimano idrauliche a disco, 180 mm / Shimano hydraulic disc, 180 mm",
                "wheels": "28\", Continental Terra Trail 45 mm", "weight": "15,9 kg"},
      "stock": {"S": 1, "M": 2, "L": 2, "XL": 1}},
-    {"name": "Raymon Vamok Comp", "category": "ebike_mtb", "price_day": 60,
-     "description": "E-MTB enduro biammortizzata con motore Bosch CX e batteria da 800 Wh. Assetto mullet 29\"/27,5\" per tanto grip e agilità sui sentieri.",
-     "description_en": "Full-suspension enduro e-MTB with Bosch CX motor and 800 Wh battery. Mullet 29\"/27.5\" setup for plenty of grip and agility on trails.",
-     "image_url": "https://raymon.imgix.net/userdata/dcshop/images/372171_raymon-vamok-comp-blackseagreen-side.png" + IMG_PARAMS,
-     "specs": {"frame": "Alluminio 6061 / 6061 aluminium", "motor": "Bosch Performance Line CX",
-               "battery": "Bosch PowerTube 800 Wh", "suspension": "160 mm – 160 mm",
-               "groupset": "Shimano Deore 12v", "brakes": "Idrauliche a disco 4 pistoncini / 4-piston hydraulic disc",
-               "wheels": "29\" – 27,5\" (mullet)", "weight": "26,9 kg"},
-     "stock": {"S": 1, "M": 2, "L": 2, "XL": 1}},
+    {"name": "Raymon Vamok Pro", "category": "ebike_mtb", "price_day": 60,
+     "description": "E-MTB enduro biammortizzata con motore Bosch CX di ultima generazione (120 Nm) e batteria da 800 Wh. Sospensioni RockShox, cambio Deore XT e freni Magura a 4 pistoncini; ruote 29\"/27,5\" per grip e agilità sui sentieri.",
+     "description_en": "Full-suspension enduro e-MTB with the latest Bosch CX motor (120 Nm) and 800 Wh battery. RockShox suspension, Deore XT drivetrain and 4-piston Magura brakes; 29\"/27.5\" mullet wheels for grip and agility on trails.",
+     "image_url": "https://raymon.imgix.net/userdata/dcshop/images/676756_raymon-vamok-pro-smokelavenderblack-side.png" + IMG_PARAMS,
+     "specs": {"frame": "Alluminio 6061 / 6061 aluminium", "motor": "Bosch Performance Line CX (Gen 5), 120 Nm",
+               "battery": "Bosch PowerTube 800 Wh, estraibile / removable",
+               "suspension": "RockShox Domain Gold R 160 mm – Super Deluxe Select 160 mm",
+               "groupset": "Shimano Deore XT 12v (10-51T)", "brakes": "Magura Louise Elite 4 pistoncini, 203 mm / 4-piston, 203 mm",
+               "wheels": "29\" – 27,5\" (mullet)", "weight": "25,9 kg"},
+     "stock": {"S": 0, "M": 2, "L": 2, "XL": 0}},
 ]
 # Previous demo bikes, replaced by the shop's real Raymon fleet.
 DEMO_BIKE_NAMES = ["Bianchi Arcadex GRX", "Specialized Turbo Creo", "Specialized Turbo Creo 2", "Orbea Wild H30",
@@ -589,6 +590,12 @@ async def startup():
     if await db.bikes.count_documents({"$or": [{"category": {"$nin": CATEGORIES}}, {"price_hour": {"$exists": True}}]}):
         await db.bikes.delete_many({})
     await db.bikes.delete_many({"name": {"$in": DEMO_BIKE_NAMES}})
+    # The shop's e-MTB is the Vamok Pro (was entered as Comp).
+    pro = next(b for b in SEED_BIKES if b["name"] == "Raymon Vamok Pro")
+    old = await db.bikes.find_one({"name": "Raymon Vamok Comp"}, {"_id": 0, "id": 1})
+    if old:
+        await db.bikes.update_one({"id": old["id"]}, {"$set": {k: pro[k] for k in ("name", "description", "description_en", "image_url", "specs")}})
+        await db.bookings.update_many({"bike_id": old["id"]}, {"$set": {"bike_name": pro["name"], "bike_image": pro["image_url"]}})
     if await db.bikes.count_documents({}) == 0:
         for b in SEED_BIKES:
             await db.bikes.insert_one(Bike(**b).model_dump())
