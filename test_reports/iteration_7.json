@@ -1,0 +1,30 @@
+{
+  "summary": "Backend tests for new Italian booking-confirmation email feature in /app/backend/mailer.py. Added /app/backend/tests/test_mailer.py with 10 tests, ALL PASSED. Covered: (1) booking_email() produces subject 'Prenotazione confermata NOL-123 – Mondo Noleggio', renders Italian rows Bici/Ritiro/Riconsegna/Durata/Totale/Pagamento, omits 'Codice prenotazione' row and NOL segment in subject when sheet_id is missing, shows 'Pagato con carta' for paid stripe bookings vs 'Da pagare in negozio al ritiro' for store, uses singular 'giorno' for 1 day and plural 'giorni' otherwise, and passes _assert_safe_email guardrails. (2) send_email(to='delivered@resend.dev') via Emergent managed email proxy returns True. (3) on_booking_confirmed(db,id) with a direct Mongo insert source='test' (so sheet_writer skips writing to the real Google Sheet) sets confirmation_email_sent=True; a second call is idempotent (flag stays True, status unchanged); a booking with status='pending_payment' is NOT emailed (flag remains unset). (4) Regression: GET /api/bikes returns 200 with seeded bikes and POST /api/auth/login for admin returns a JWT with role=admin. Verified cleanup: 0 leftover source='test' bookings in Mongo after the run. Code review of server.py:331-355 (create_booking) and 415-429 (apply_payment) confirms both now schedule on_booking_confirmed instead of push_booking as required.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_mailer.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "mailer.on_booking_confirmed (mailer.py:161-171) correctly uses an atomic find_one_and_update with confirmation_email_sent:{$ne:True} as the single-send gate — safe for the two concurrent triggers (store-path task + stripe apply_payment task).",
+    "On send_email failure the flag is reset to False so a future trigger can retry (good). push_booking is called BEFORE the claim gate but is itself idempotent via sheet_id check, so retries won't create duplicate sheet rows.",
+    "server.py:354-355 and server.py:426 correctly schedule on_booking_confirmed instead of push_booking for the two confirmation moments. cancel_booking (381) and admin_patch_booking (487) still call push_booking directly, which is the correct behavior (status change, not initial confirmation).",
+    "mailer.booking_email uses escape() for all user-controlled fields (user_name, bike_name, size, sheet_id, reply) — XSS-safe. Subject includes raw EMAIL_FROM_NAME env var (not escaped) which is OK because it's env-controlled, not user input.",
+    "Minor: EMAIL_REPLY_TO is sent to Emergent as 'contact_email' in payload (mailer.py:98). Confirm this is the correct Emergent field name for Reply-To header behavior; a request-trace test is not possible without the proxy returning the final SMTP headers."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_mailer.py (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "n/a (backend-only task)"},
+  "seed_data_creation": "Each on_booking_confirmed test inserts one booking with source='test' directly into Mongo (bypassing POST /api/bookings), then the autouse _cleanup fixture deletes it. Verified post-run: 0 source='test' bookings remain. The real Google Sheet is NEVER touched because sheet_writer.push_booking returns early when source != 'app'.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend test file for the email feature: /app/backend/tests/test_mailer.py (10 tests, all passing). To re-run: `cd /app && python -m pytest backend/tests/test_mailer.py -v`. BASE_URL comes from tests.conftest; recipient for live email send is pinned to delivered@resend.dev. SAFETY: never create bookings through POST /api/bookings with payment_method=store or mark stripe paid for source='app' bookings — those will write to the user's real Google Sheet. Use direct Mongo inserts with source='test' as this test file does."
+}

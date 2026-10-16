@@ -5,6 +5,7 @@ import re
 import asyncio
 from sheet_sync import sync_from_sheet
 from sheet_writer import push_booking, script_url, ping as sheet_ping
+from mailer import on_booking_confirmed
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -351,7 +352,7 @@ async def create_booking(body: BookingIn, user: dict = Depends(current_user)):
     booking.unit_id = await pick_unit(b["id"], body.size, start, end)
     await db.bookings.insert_one(booking.model_dump())
     if booking.status == "confirmed":
-        asyncio.create_task(push_booking(db, booking.id))
+        asyncio.create_task(on_booking_confirmed(db, booking.id))
     return booking
 
 
@@ -422,7 +423,7 @@ async def apply_payment(session_id: str, payment_status: str, status: str):
     if payment_status == "paid":
         await db.bookings.update_one({"id": tx["booking_id"]},
                                      {"$set": {"payment_status": "paid", "status": "confirmed"}})
-        asyncio.create_task(push_booking(db, tx["booking_id"]))
+        asyncio.create_task(on_booking_confirmed(db, tx["booking_id"]))
     elif status == "expired":
         await db.bookings.update_one({"id": tx["booking_id"], "payment_status": {"$ne": "paid"}},
                                      {"$set": {"payment_status": "failed", "status": "cancelled"}})

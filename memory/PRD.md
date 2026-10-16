@@ -47,3 +47,4 @@ App scaricabile da tutti per gestire la giacenza di bici a noleggio (gravel, e-b
 ## Update (fork)
 - Public Apps Script code page: /api/codice (and /api/sheet-script/{token})
 - Apps Script Web App URL linked & verified (ping OK), stored in db.meta sheet_write
+- Booking confirmation email (Italian) via Emergent managed email: backend/mailer.py, sent once after store booking or Stripe paid; sender 'Mondo Noleggio', reply-to info@chientibike.it
