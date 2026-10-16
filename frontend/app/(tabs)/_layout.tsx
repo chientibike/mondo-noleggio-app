@@ -23,6 +23,10 @@ export default function TabsLayout() {
           <NativeTabs.Trigger.Icon sf="calendar" />
           <NativeTabs.Trigger.Label>{t("tab_bookings")}</NativeTabs.Trigger.Label>
         </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="routes">
+          <NativeTabs.Trigger.Icon sf="map" />
+          <NativeTabs.Trigger.Label>{t("tab_routes")}</NativeTabs.Trigger.Label>
+        </NativeTabs.Trigger>
         <NativeTabs.Trigger name="profile">
           <NativeTabs.Trigger.Icon sf="person.crop.circle" />
           <NativeTabs.Trigger.Label>{t("tab_profile")}</NativeTabs.Trigger.Label>
@@ -64,6 +68,16 @@ export default function TabsLayout() {
           tabBarButtonTestID: "tab-bookings",
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons name={focused ? "calendar" : "calendar-outline"} color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="routes"
+        options={{
+          title: t("tab_routes"),
+          tabBarButtonTestID: "tab-routes",
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons name={focused ? "map" : "map-outline"} color={color} size={size} />
           ),
         }}
       />
