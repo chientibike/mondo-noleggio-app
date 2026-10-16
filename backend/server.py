@@ -501,33 +501,39 @@ async def admin_delete_bike(bike_id: str, _: dict = Depends(admin_user)):
 
 
 # ---------------- Startup / seed ----------------
+IMG_PARAMS = "?auto=format,compress&w=1200&h=800&fit=fill&fill=solid&fill-color=ffffff"
 SEED_BIKES = [
-    {"name": "Bianchi Arcadex GRX", "category": "gravel", "price_day": 40,
-     "description": "Gravel muscolare in alluminio, leggera e reattiva. Perfetta per strade bianche, sterrati e lunghi giri in campagna.",
-     "description_en": "Lightweight, responsive aluminium gravel bike. Perfect for white roads, dirt tracks and long countryside rides.",
-     "image_url": "https://images.unsplash.com/photo-1632061046597-325464194c23?w=1200&q=70&auto=format&fit=crop",
-     "specs": {"frame": "Alluminio / Aluminium", "groupset": "Shimano GRX 2x11", "brakes": "Shimano GRX idrauliche a disco / hydraulic disc",
-               "wheels": "700c, WTB Riddler 45 mm", "weight": "9,8 kg"},
+    {"name": "Raymon Soreno Comp", "category": "gravel", "price_day": 40,
+     "description": "Gravel muscolare con telaio in carbonio leggero e gomme da 45 mm: veloce su asfalto, sicura e divertente su strade bianche e sterrati.",
+     "description_en": "Non-electric gravel bike with a light carbon frame and 45 mm tyres: fast on tarmac, safe and fun on gravel roads and trails.",
+     "image_url": "https://raymon.imgix.net/userdata/dcshop/images/901102_raymon-soreno-comp-carbon-matt-side.png" + IMG_PARAMS,
+     "specs": {"frame": "Carbonio MLC / MLC carbon", "groupset": "Shimano GRX 1x12 (40T, 10-51T)",
+               "brakes": "Shimano idrauliche a disco, 160 mm / Shimano hydraulic disc, 160 mm",
+               "wheels": "28\", Maxxis Reaver 45 mm", "weight": "10,2 kg"},
      "stock": {"S": 2, "M": 3, "L": 3, "XL": 1}},
-    {"name": "Specialized Turbo Creo 2", "category": "egravel", "price_day": 50,
-     "description": "E-gravel leggera con motore SL: assistenza naturale, salite senza fatica e grande autonomia.",
-     "description_en": "Lightweight e-gravel with SL motor: natural assistance, effortless climbs and long range.",
-     "image_url": "https://images.pexels.com/photos/33199511/pexels-photo-33199511.jpeg?auto=compress&cs=tinysrgb&w=1200",
-     "specs": {"frame": "Carbonio FACT 11r / Carbon", "motor": "Specialized SL 1.2, 50 Nm", "battery": "320 Wh",
-               "range": "fino a 130 km / up to 130 km", "groupset": "Shimano GRX 1x11", "brakes": "Idrauliche a disco / hydraulic disc",
-               "wheels": "700c, Pathfinder 47 mm", "weight": "13,4 kg"},
+    {"name": "Raymon Norza Comp", "category": "egravel", "price_day": 50,
+     "description": "E-gravel in carbonio con motore Bosch SX: leggera e sportiva, ti spinge in salita e contro vento senza perdere il feeling della gravel.",
+     "description_en": "Carbon e-gravel with Bosch SX motor: light and sporty, it pushes you uphill and into the wind while keeping that gravel feel.",
+     "image_url": "https://raymon.imgix.net/userdata/dcshop/images/291072_raymon-norza-comp-greige-freckels-front.png" + IMG_PARAMS,
+     "specs": {"frame": "Carbonio MLC, batteria estraibile / MLC carbon, removable battery",
+               "motor": "Bosch Performance Line SX, 60 Nm", "battery": "Bosch CompactTube 400 Wh",
+               "groupset": "Shimano CUES 1x11 (11-50T)",
+               "brakes": "Shimano idrauliche a disco, 180 mm / Shimano hydraulic disc, 180 mm",
+               "wheels": "28\", Continental Terra Trail 45 mm", "weight": "15,9 kg"},
      "stock": {"S": 1, "M": 2, "L": 2, "XL": 1}},
-    {"name": "Ghost E-Riot AM", "category": "ebike_mtb", "price_day": 60,
-     "description": "E-MTB biammortizzata per sentieri e salite impegnative. Motore potente e batteria generosa per tutta la giornata.",
-     "description_en": "Full-suspension e-MTB for trails and steep climbs. Powerful motor and big battery for a full day out.",
-     "image_url": "https://images.pexels.com/photos/8755668/pexels-photo-8755668.jpeg?auto=compress&cs=tinysrgb&w=1200",
-     "specs": {"frame": "Alluminio / Aluminium", "motor": "Shimano EP8, 85 Nm", "battery": "720 Wh",
-               "range": "fino a 100 km / up to 100 km", "suspension": "160 mm – 150 mm", "groupset": "Shimano Deore 12v",
-               "brakes": "Shimano 4 pistoncini / 4-piston", "wheels": "29\" – 27,5\"", "weight": "24,5 kg"},
+    {"name": "Raymon Vamok Comp", "category": "ebike_mtb", "price_day": 60,
+     "description": "E-MTB enduro biammortizzata con motore Bosch CX e batteria da 800 Wh. Assetto mullet 29\"/27,5\" per tanto grip e agilità sui sentieri.",
+     "description_en": "Full-suspension enduro e-MTB with Bosch CX motor and 800 Wh battery. Mullet 29\"/27.5\" setup for plenty of grip and agility on trails.",
+     "image_url": "https://raymon.imgix.net/userdata/dcshop/images/372171_raymon-vamok-comp-blackseagreen-side.png" + IMG_PARAMS,
+     "specs": {"frame": "Alluminio 6061 / 6061 aluminium", "motor": "Bosch Performance Line CX",
+               "battery": "Bosch PowerTube 800 Wh", "suspension": "160 mm – 160 mm",
+               "groupset": "Shimano Deore 12v", "brakes": "Idrauliche a disco 4 pistoncini / 4-piston hydraulic disc",
+               "wheels": "29\" – 27,5\" (mullet)", "weight": "26,9 kg"},
      "stock": {"S": 1, "M": 2, "L": 2, "XL": 1}},
 ]
-OLD_SEED_NAMES = {"Bianchi Arcadex GRX": "Bianchi Arcadex GRX", "Specialized Turbo Creo": "Specialized Turbo Creo 2",
-                  "Orbea Wild H30": "Ghost E-Riot AM"}
+# Previous demo bikes, replaced by the shop's real Raymon fleet.
+DEMO_BIKE_NAMES = ["Bianchi Arcadex GRX", "Specialized Turbo Creo", "Specialized Turbo Creo 2", "Orbea Wild H30",
+                   "Ghost E-Riot AM", "Cannondale Topstone 2", "Orbea Vibe H30"]
 
 
 @app.on_event("startup")
@@ -545,12 +551,7 @@ async def startup():
     # Migration: drop bikes from the old category set (gravel/ebike/gravel_muscolare era).
     if await db.bikes.count_documents({"$or": [{"category": {"$nin": CATEGORIES}}, {"price_hour": {"$exists": True}}]}):
         await db.bikes.delete_many({})
-    # Migration: refresh seeded bikes with real photos and specs (only those not edited yet).
-    seed_by_name = {b["name"]: b for b in SEED_BIKES}
-    for old, new in OLD_SEED_NAMES.items():
-        b = seed_by_name[new]
-        await db.bikes.update_one({"name": old, "specs": {"$exists": False}}, {"$set": {
-            k: b[k] for k in ("name", "description", "description_en", "image_url", "specs")}})
+    await db.bikes.delete_many({"name": {"$in": DEMO_BIKE_NAMES}})
     if await db.bikes.count_documents({}) == 0:
         for b in SEED_BIKES:
             await db.bikes.insert_one(Bike(**b).model_dump())

@@ -102,9 +102,9 @@ class TestBikes:
         bikes = api.get(f"{BASE_URL}/api/bikes").json()
         by_cat = {b["category"]: b for b in bikes}
         # names match the iter 3 seed
-        assert by_cat["gravel"]["name"] == "Bianchi Arcadex GRX"
-        assert by_cat["egravel"]["name"] == "Specialized Turbo Creo 2"
-        assert by_cat["ebike_mtb"]["name"] == "Ghost E-Riot AM"
+        assert by_cat["gravel"]["name"] == "Raymon Soreno Comp"
+        assert by_cat["egravel"]["name"] == "Raymon Norza Comp"
+        assert by_cat["ebike_mtb"]["name"] == "Raymon Vamok Comp"
         for b in bikes:
             assert isinstance(b.get("specs"), dict) and len(b["specs"]) > 0, f"{b['name']} missing specs"
             assert b.get("description") and b.get("description_en"), f"{b['name']} missing bilingual desc"
