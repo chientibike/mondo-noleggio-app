@@ -11,6 +11,7 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { api, type Bike, type Category, type Size } from "@/src/api";
 import { CATEGORY_LABELS, SIZES, SIZE_HEIGHTS, euro } from "@/src/format";
 import { Button, Chip } from "@/src/components/ui";
+import { DirectionsButton } from "@/src/components/DirectionsButton";
 import { useAuth } from "@/src/auth";
 import { usesNativeTabs } from "@/src/navigation";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -55,6 +56,9 @@ export default function CatalogScreen() {
               <Ionicons name="person" size={20} color={colors.onBrandSecondary} />
             )}
           </Pressable>
+        </View>
+        <View style={styles.directions}>
+          <DirectionsButton testID="home-directions-button" />
         </View>
         <ScrollView
           horizontal
@@ -166,6 +170,7 @@ const useStyles = makeStyles((c) => ({
   header: { backgroundColor: c.surface, borderBottomWidth: 0.5, borderBottomColor: c.border },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 24, marginBottom: 8 },
   logo: { width: 52, height: 52 },
+  directions: { paddingHorizontal: 24, paddingBottom: 4 },
   kicker: { fontSize: 12, fontWeight: "700", color: c.brand, letterSpacing: 1.2, textTransform: "uppercase" },
   title: { fontSize: 28, fontWeight: "800", color: c.onSurface, letterSpacing: -0.5 },
   avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.brandSecondary, alignItems: "center", justifyContent: "center", overflow: "hidden" },

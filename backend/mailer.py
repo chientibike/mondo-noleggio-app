@@ -125,6 +125,7 @@ SHOP_ADDRESS = "Contrada Le Grazie 43, Tolentino (MC)"
 SHOP_PHONE = "328 983 2243"
 SHOP_TZ = ZoneInfo("Europe/Rome")
 REMINDER_HOUR = 12
+REVIEW_URL = "https://g.page/r/CRrkPKDBIM0oEBM/review"
 
 
 def _rows(bk: dict, extra: list | None = None) -> list:
@@ -199,6 +200,21 @@ def reminder_email(bk: dict) -> tuple[str, str]:
     return _subject("Promemoria ritiro domani", bk), html
 
 
+def review_email(bk: dict) -> tuple[str, str]:
+    brand = escape(os.environ["EMAIL_FROM_NAME"])
+    btn = (f'<p style="text-align:center;margin:24px 0"><a href="{escape(REVIEW_URL)}" '
+           'style="background:#1a8f3c;color:#ffffff;text-decoration:none;font-weight:bold;'
+           'padding:14px 24px;border-radius:10px;display:inline-block">⭐ Lascia una recensione</a></p>')
+    html = _card("Com'è andato il tuo giro? ⭐",
+                 f'Ciao {escape(bk["user_name"])}, grazie per aver noleggiato con {brand}! '
+                 'Ci farebbe molto piacere sapere com\'è andata: bastano 30 secondi.',
+                 [("Bici", f'{bk["bike_name"]} – taglia {bk["size"]}'),
+                  ("Noleggio", f'{_it(bk["start"])} – {_it(bk["end"])}')],
+                 btn + "<p>La tua opinione aiuta altri ciclisti a scoprirci. Grazie e a presto in sella!</p>"
+                 + _contact())
+    return f"Com'è andato il tuo noleggio? – {os.environ['EMAIL_FROM_NAME']}", html
+
+
 async def _send_once(db, booking_id: str, flag: str, query: dict, build, to_field: str | None) -> None:
     """Atomically claim `flag` on the booking, send, and release the claim if sending fails."""
     bk = await db.bookings.find_one_and_update({"id": booking_id, flag: {"$ne": True}, **query},
@@ -222,16 +238,25 @@ async def on_booking_confirmed(db, booking_id: str):
 
 
 async def send_due_reminders(db) -> int:
-    """From 12:00 (Italy time), remind app customers whose pickup is tomorrow."""
+    """From 12:00 (Italy time): remind customers whose pickup is tomorrow and
+    ask for a review from those who returned the bike yesterday."""
     now = datetime.now(SHOP_TZ)
     if now.hour < REMINDER_HOUR:
         return 0
     tomorrow = (now.date() + timedelta(days=1)).isoformat()
-    q = {"status": "confirmed", "source": "app", "start": {"$regex": f"^{tomorrow}"}}
-    ids = await db.bookings.distinct("id", {**q, "reminder_email_sent": {"$ne": True}})
-    for bid in ids:
-        await _send_once(db, bid, "reminder_email_sent", q, reminder_email, "user_email")
-    return len(ids)
+    yesterday = (now.date() - timedelta(days=1)).isoformat()
+    jobs = [
+        ("reminder_email_sent", reminder_email,
+         {"status": "confirmed", "source": "app", "start": {"$regex": f"^{tomorrow}"}}),
+        ("review_email_sent", review_email,
+         {"status": {"$in": ["confirmed", "completed"]}, "source": "app", "end": {"$regex": f"^{yesterday}"}}),
+    ]
+    sent = 0
+    for flag, build, q in jobs:
+        for bid in await db.bookings.distinct("id", {**q, flag: {"$ne": True}}):
+            await _send_once(db, bid, flag, q, build, "user_email")
+            sent += 1
+    return sent
 
 
 async def reminder_loop(db):

@@ -9,6 +9,7 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { api, type Booking } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Badge, Button } from "@/src/components/ui";
+import { DirectionsButton } from "@/src/components/DirectionsButton";
 import { PAYMENT_LABELS, STATUS_LABELS, euro, fmtRange, fmtUnits, statusTone } from "@/src/format";
 import { useI18n } from "@/src/i18n";
 import { startStripePayment } from "@/src/payments";
@@ -64,6 +65,7 @@ export default function BookingsScreen() {
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
       <Text style={styles.title}>{t("my_bookings")}</Text>
+      <DirectionsButton testID="bookings-directions-button" />
     </View>
   );
 
@@ -149,7 +151,7 @@ export default function BookingsScreen() {
 
 const useStyles = makeStyles((c) => ({
   root: { flex: 1, backgroundColor: c.surfaceSecondary },
-  header: { paddingHorizontal: 24, paddingBottom: 12, backgroundColor: c.surface, borderBottomWidth: 0.5, borderBottomColor: c.border },
+  header: { paddingHorizontal: 24, paddingBottom: 12, gap: 12, backgroundColor: c.surface, borderBottomWidth: 0.5, borderBottomColor: c.border },
   title: { fontSize: 28, fontWeight: "800", color: c.onSurface, letterSpacing: -0.5 },
   center: { alignItems: "center", justifyContent: "center", gap: 12, padding: 32, marginTop: 40 },
   emptyTitle: { fontSize: 17, fontWeight: "700", color: c.onSurface, textAlign: "center" },

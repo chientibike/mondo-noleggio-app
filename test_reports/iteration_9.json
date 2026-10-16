@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 9: Added /app/backend/tests/test_mailer_iter9.py with 10 tests, ALL PASSED. Backend covered: (1) review_email(bk) subject exactly 'Com\\'è andato il tuo noleggio? – Mondo Noleggio', contains REVIEW_URL=https://g.page/r/CRrkPKDBIM0oEBM/review inside href, contains 'Lascia una recensione' button label, rows list bike name + localized dates 10/07/2026–12/07/2026, passes _assert_safe_email (G2/G3 guardrails). (2) send_due_reminders(db) with mailer.REMINDER_HOUR monkeypatched to 0 and send_email stubbed to True: a confirmed source='app' booking with end=yesterday (Rome date) gets review_email_sent=True; same for status='completed'; cancelled is skipped; end=today is skipped; not re-sent on a second pass; and the iteration-8 reminder path (start=tomorrow confirmed source='app') still sets reminder_email_sent=True — regression intact. Frontend (390x844): /app/frontend/app/(tabs)/index.tsx renders testID='home-directions-button' with text 'Come arrivare' + 'Contrada Le Grazie 43, Tolentino (MC)', bounding box 342x48 (≥44 touch target). Tap opens popup to https://www.google.com/maps/dir/?api=1&destination=Contrada%20Le%20Grazie%2043%2C%2062029%20Tolentino%20MC%2C%20Italia — matches spec. /app/frontend/app/(tabs)/bookings.tsx renders testID='bookings-directions-button' in header for BOTH logged-out (bookings-login-button also visible) and (implicitly, same header is rendered pre-auth check) logged-in states; same text, same URL on tap. Layout not broken on 390x844. English string table verified at /app/frontend/src/i18n.tsx:274 — directions: 'Get directions' (shown when locale='en'). SAFETY: all test bookings inserted directly into Mongo and deleted via autouse cleanup fixture; send_email stubbed to True so zero real emails sent; send_due_reminders does not call sheet_writer so the user's real Google Sheet is untouched; recipient is delivered@resend.dev only; no POST /api/bookings and no Stripe paid flags were triggered.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_mailer_iter9.py",
+    "/app/test_reports/pytest/pytest_iter9.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "mailer.review_email (mailer.py:203-215) builds the button as a plain <a href=REVIEW_URL>⭐ Lascia una recensione</a> inside _card(); REVIEW_URL=https://g.page/r/CRrkPKDBIM0oEBM/review is https and the host 'g.page' is non-shortener non-IP, so _assert_safe_email passes. Correct.",
+  "mailer.send_due_reminders (mailer.py:240-259) now iterates TWO jobs (reminder + review) with their own flag + status/end filter; each delegates to _send_once so the per-id atomic claim is reused unchanged — race-safe and will not resend. Review filter uses status∈{confirmed,completed} + source='app' + end regex-anchored to yesterday's Rome ISO date, which is exactly what the spec requires.",
+  "The REMINDER_HOUR=12 gate applies to BOTH jobs (reminder and review). Spec says 'from 12:00 Europe/Rome' for the review email — matches. If the service is DOWN across the entire 12:00–23:59 window of the day after a return, the review for that specific booking will still be sent on any subsequent day because the filter uses end='yesterday' only on that one date; after that it's missed with no catch-up. Acceptable for current scope but worth flagging if durability is required.",
+  "DirectionsButton (DirectionsButton.tsx:8) hard-codes the full postal destination 'Contrada Le Grazie 43, 62029 Tolentino MC, Italia' inside MAPS_URL while the on-screen address text shows the shorter 'Contrada Le Grazie 43, Tolentino (MC)'. Both are internally consistent and the richer destination string gives Google Maps the best disambiguation. OK.",
+  "DirectionsButton uses onPress → Linking.openURL(MAPS_URL). Confirmed via Playwright that on web this opens a new tab with the exact URL (window.open under the hood). Touch target 342x48 ≥ 44pt. All text wrapped in <Text>. Good."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_mailer_iter9.py (new)",
+    "/app/test_reports/pytest/pytest_iter9.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (both directions buttons present + correct text + correct Maps URL on tap; layout OK on 390x844; iter8 reminder regression passes)"},
+  "seed_data_creation": "Each test inserts bookings directly into Mongo with source='app' and id prefix 'test_<uuid>'; autouse _env_and_cleanup fixture deletes them by id after each test. Post-run verification: 0 test bookings remain. send_due_reminders is DB-only and never calls sheet_writer, so source='app' is safe here.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All iteration-9 review-email features verified: review_email() content + guardrails, send_due_reminders() review branch, iteration-8 reminder regression still passes. Re-run: `cd /app && python -m pytest backend/tests/test_mailer_iter9.py -v`. Playwright on https://bici-disponibili.preview.emergentagent.com confirmed home-directions-button + bookings-directions-button open https://www.google.com/maps/dir/?api=1&destination=Contrada%20Le%20Grazie%2043%2C%2062029%20Tolentino%20MC%2C%20Italia. SAFETY contract still applies: never POST /api/bookings with payment_method=store and never mark a stripe booking paid for source='app' — those will write to the user's real Google Sheet via on_booking_confirmed→push_booking. send_due_reminders is DB-only, safe to exercise.",
+  "rca_of_issue": "N/A — no bugs found."
+}
