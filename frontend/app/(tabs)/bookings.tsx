@@ -110,7 +110,7 @@ export default function BookingsScreen() {
                   <Image source={{ uri: item.bike_image }} style={styles.thumb} contentFit="cover" />
                   <View style={{ flex: 1, gap: 4 }}>
                     <Text style={styles.bikeName} numberOfLines={1}>{item.bike_name}</Text>
-                    <Text style={styles.meta}>{t("size_x", { s: item.size })} · {fmtUnits(item.mode, item.units)}</Text>
+                    <Text style={styles.meta}>{t("size_x", { s: item.size })} · {fmtUnits(item.mode, item.units)}{item.unit_id ? ` · ${t("assigned_unit", { unit: item.unit_id })}` : ""}</Text>
                     <Text style={styles.meta}>{fmtRange(item)}</Text>
                   </View>
                   <Text style={styles.total}>{euro(item.total)}</Text>

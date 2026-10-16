@@ -53,7 +53,7 @@ export default function Admin() {
 
   const sheetQ = useQuery({
     queryKey: ["sheet-status"],
-    queryFn: () => api<{ synced_at: string | null; units?: number; rentals?: number; error?: string | null }>("/admin/sheet/status"),
+    queryFn: () => api<{ synced_at: string | null; units?: number; rentals?: number; error?: string | null; write_enabled?: boolean }>("/admin/sheet/status"),
     enabled: isAdmin,
   });
   const syncNow = useMutation({
@@ -122,6 +122,11 @@ export default function Admin() {
                 ? t("sheet_last", { time: new Date(sheet.synced_at).toLocaleTimeString().slice(0, 5), n: sheet.rentals ?? 0 })
                 : t("sheet_never")}
             </Text>
+            <Pressable testID="sheet-link-open" onPress={() => router.push("/admin/sheet-link")} hitSlop={8}>
+              <Text style={[styles.sheetTag, !sheet?.write_enabled && { color: colors.warning }]}>
+                {sheet?.write_enabled ? t("sheet_write_on") : t("sheet_write_off")} ›
+              </Text>
+            </Pressable>
           </View>
           <Pressable testID="sheet-sync-button" onPress={() => syncNow.mutate()} disabled={syncNow.isPending} style={styles.syncBtn}>
             {syncNow.isPending ? <ActivityIndicator size="small" color={colors.onBrandSecondary} /> : <Ionicons name="sync" size={20} color={colors.onBrandSecondary} />}
@@ -189,6 +194,7 @@ export default function Admin() {
               <Text style={styles.meta}>{fmtRange(item)}</Text>
               <Text style={styles.meta}>{item.user_name}{item.user_email ? ` · ${item.user_email}` : ""}{item.phone ? ` · ${item.phone}` : ""}</Text>
               {item.source === "sheet" && <Text style={styles.sheetTag}>{t("from_sheet", { id: item.sheet_id ?? "", unit: item.unit_id ?? "" })}</Text>}
+              {item.source !== "sheet" && !!item.unit_id && <Text style={styles.sheetTag} testID={`admin-booking-unit-${item.id}`}>{t("assigned_unit", { unit: item.unit_id })}{item.sheet_id ? ` · ${item.sheet_id}` : ""}</Text>}
               <View style={styles.badges}>
                 <Badge label={STATUS_LABELS[item.status]} tone={statusTone(item)} />
                 <Badge label={PAYMENT_LABELS[item.payment_status]} tone={item.payment_status === "paid" ? "brand" : "neutral"} />

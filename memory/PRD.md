@@ -31,7 +31,9 @@ App scaricabile da tutti per gestire la giacenza di bici a noleggio (gravel, e-b
 - Ogni bici: foto coerente, caratteristiche (telaio, motore, batteria, autonomia, escursione, cambio, freni, ruote, peso) e descrizione IT/EN, modificabili dall'admin
 - Flotta reale: Raymon Soreno Comp (Gravel 40€), Raymon Norza Comp (E-gravel 50€), Raymon Vamok Pro (E-bike MTB Bosch CX 120 Nm, 800 Wh, 60€) con foto ufficiali e schede tecniche; quantità per taglia da confermare
 - Sync foglio → app (sola lettura, ogni 2 min + pulsante "Sincronizza" in admin): stock per taglia dalla tabella flotta (16 unità EG/GR/EB), noleggi dal "Registro storico noleggi" importati come prenotazioni (source=sheet) che bloccano la disponibilità. File: backend/sheet_sync.py, env SHEET_ID/SHEET_GID
-- In attesa: scrittura app → foglio (serve OAuth Google Client ID/Secret)
+- Sync ogni 30s; scheda opzionale "Modelli" (Modello, Nome app, Categoria, Prezzo giorno, Foto, Descrizioni, specifiche) crea/aggiorna modelli; nuove righe flotta (XX-NNN … TG S/M/L/XL) aggiornano quantità; unità salvate in db.units
+- Assegnazione automatica unità (es. GR-008) a ogni prenotazione app
+- Scrittura app → foglio via Google Apps Script web app (backend/sheet_writer.py, env SHEET_SCRIPT_URL + SHEET_SCRIPT_TOKEN; script in memory/apps_script_modulo_noleggio.gs). In attesa che l'utente pubblichi lo script e fornisca l'URL
 
 - App rinominata "Mondo Noleggio"; logo E-BIKE 4 ENDURO (ChientiBike) su icona, splash, favicon, header catalogo e login
 
@@ -41,3 +43,7 @@ App scaricabile da tutti per gestire la giacenza di bici a noleggio (gravel, e-b
 - P1: Upload foto bici (object storage) invece di URL; email di conferma prenotazione
 - P1: Calendario disponibilità per admin, blocco bici in manutenzione
 - P2: Codici sconto / pacchetti, recensioni, multi-negozio
+
+## Update (fork)
+- Public Apps Script code page: /api/codice (and /api/sheet-script/{token})
+- Apps Script Web App URL linked & verified (ping OK), stored in db.meta sheet_write

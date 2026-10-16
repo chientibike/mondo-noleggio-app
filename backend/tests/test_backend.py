@@ -427,9 +427,12 @@ class TestSheetSync:
         assert js["units"] == 16, f"units={js['units']}"
         assert js["rentals"] == 11, f"rentals={js['rentals']}"
         stock = js["stock"]
-        assert stock["egravel"] == {"S": 1, "M": 2, "L": 2, "XL": 1}, stock["egravel"]
-        assert stock["gravel"] == {"S": 1, "M": 2, "L": 2, "XL": 1}, stock["gravel"]
-        assert stock["ebike_mtb"] == {"S": 0, "M": 2, "L": 2, "XL": 0}, stock["ebike_mtb"]
+        # stock is keyed by bike_id -> look up via /api/bikes to assert per category
+        bikes = api.get(f"{BASE_URL}/api/bikes").json()
+        by_cat = {b["category"]: b for b in bikes}
+        assert stock.get(by_cat["gravel"]["id"]) == {"S": 1, "M": 2, "L": 2, "XL": 1}, stock
+        assert stock.get(by_cat["egravel"]["id"]) == {"S": 1, "M": 2, "L": 2, "XL": 1}, stock
+        assert stock.get(by_cat["ebike_mtb"]["id"]) == {"S": 0, "M": 2, "L": 2, "XL": 0}, stock
         assert js.get("synced_at")
         assert js.get("error") is None
 
@@ -543,3 +546,138 @@ class TestPhone:
         assert rm.json()["phone"] == "+39 333 1234567"
         # Cleanup
         api.post(f"{BASE_URL}/api/bookings/{rb.json()['id']}/cancel", headers=h(token))
+
+
+
+# ------------------- Unit assignment + Sheet write link (iter 5) -------------------
+class TestUnitAssignment:
+    def _future_date(self, offset=40):
+        return (datetime.date.today() + datetime.timedelta(days=offset)).isoformat()
+
+    def test_assign_unit_gravel_M(self, api, admin_token):
+        """Three overlapping gravel M bookings: 1->GR-008, 2->GR-009, 3->409 (stock M=2)."""
+        api.post(f"{BASE_URL}/api/admin/sheet/sync", headers=h(admin_token))
+        bikes = api.get(f"{BASE_URL}/api/bikes").json()
+        gravel = next(b for b in bikes if b["category"] == "gravel")
+        # Create fresh users to avoid overlap with other tests
+        tokens = []
+        for i in range(3):
+            e = f"TEST_unit_{uuid.uuid4().hex[:8]}@example.com"
+            r = api.post(f"{BASE_URL}/api/auth/register",
+                         json={"email": e, "password": "secret12", "name": f"U{i}"})
+            tokens.append(r.json()["token"])
+        day = self._future_date(40)
+        payload = {"bike_id": gravel["id"], "size": "M", "date": day,
+                   "days": 1, "payment_method": "store"}
+        r1 = api.post(f"{BASE_URL}/api/bookings", json=payload, headers=h(tokens[0]))
+        r2 = api.post(f"{BASE_URL}/api/bookings", json=payload, headers=h(tokens[1]))
+        r3 = api.post(f"{BASE_URL}/api/bookings", json=payload, headers=h(tokens[2]))
+        try:
+            assert r1.status_code == 200, r1.text
+            assert r2.status_code == 200, r2.text
+            u1, u2 = r1.json()["unit_id"], r2.json()["unit_id"]
+            assert u1 == "GR-008", f"first unit should be GR-008, got {u1}"
+            assert u2 == "GR-009", f"second unit should be GR-009, got {u2}"
+            assert r3.status_code == 409, f"third should 409, got {r3.status_code}: {r3.text}"
+            # Cancel first -> unit freed, new booking should pick GR-008
+            cid = r1.json()["id"]
+            rc = api.post(f"{BASE_URL}/api/bookings/{cid}/cancel", headers=h(tokens[0]))
+            assert rc.status_code == 200
+            r4 = api.post(f"{BASE_URL}/api/bookings", json=payload, headers=h(tokens[2]))
+            assert r4.status_code == 200, r4.text
+            assert r4.json()["unit_id"] == "GR-008"
+            api.post(f"{BASE_URL}/api/bookings/{r4.json()['id']}/cancel", headers=h(tokens[2]))
+        finally:
+            # Cleanup
+            for t, r in zip(tokens, (r1, r2, r3)):
+                if r.status_code == 200:
+                    api.post(f"{BASE_URL}/api/bookings/{r.json()['id']}/cancel", headers=h(t))
+
+
+class TestSheetWriteLink:
+    def test_sheet_status_write_disabled(self, api, admin_token):
+        r = api.get(f"{BASE_URL}/api/admin/sheet/status", headers=h(admin_token))
+        assert r.status_code == 200, r.text
+        js = r.json()
+        assert "write_enabled" in js
+        assert js["write_enabled"] is False, "db.meta.sheet_write should NOT be set in test env"
+
+    def test_sheet_script_admin(self, api, admin_token):
+        r = api.get(f"{BASE_URL}/api/admin/sheet/script", headers=h(admin_token))
+        assert r.status_code == 200, r.text
+        js = r.json()
+        assert "script" in js
+        code = js["script"]
+        assert "doPost" in code, "script must contain doPost"
+        assert "TOKEN" in code, "script must contain TOKEN constant"
+        # The token must be injected from env (not the placeholder)
+        token_env = os.environ.get("SHEET_SCRIPT_TOKEN", "")
+        if token_env:
+            assert token_env in code, "script should include SHEET_SCRIPT_TOKEN value"
+
+    def test_sheet_script_forbidden_for_user(self, api, user_token):
+        token, _ = user_token
+        r = api.get(f"{BASE_URL}/api/admin/sheet/script", headers=h(token))
+        assert r.status_code == 403
+
+    def test_script_url_invalid_format_422(self, api, admin_token):
+        r = api.put(f"{BASE_URL}/api/admin/sheet/script-url",
+                    json={"url": "https://example.com/foo"}, headers=h(admin_token))
+        assert r.status_code == 422, r.text
+
+    def test_script_url_invalid_format_en(self, api, admin_token):
+        """EN header translates HTTPException detail."""
+        r = api.put(f"{BASE_URL}/api/admin/sheet/script-url",
+                    json={"url": "https://example.com/foo"},
+                    headers={**h(admin_token), "Accept-Language": "en"})
+        assert r.status_code == 422
+        detail = r.json()["detail"]
+        # English translation should not be the Italian one
+        assert "non valido" not in detail.lower() or "invalid" in detail.lower()
+
+    def test_script_url_valid_format_fake_400(self, api, admin_token):
+        """Valid-format but fake URL -> 400 (ping fails)."""
+        r = api.put(f"{BASE_URL}/api/admin/sheet/script-url",
+                    json={"url": "https://script.google.com/macros/s/abc/exec"}, headers=h(admin_token))
+        assert r.status_code == 400, r.text
+
+    def test_script_url_valid_format_fake_400_en(self, api, admin_token):
+        r = api.put(f"{BASE_URL}/api/admin/sheet/script-url",
+                    json={"url": "https://script.google.com/macros/s/abc/exec"},
+                    headers={**h(admin_token), "Accept-Language": "en"})
+        assert r.status_code == 400
+        detail = r.json()["detail"]
+        assert "controlla" not in detail.lower() or "check" in detail.lower()
+
+    def test_script_url_forbidden_for_user(self, api, user_token):
+        token, _ = user_token
+        r = api.put(f"{BASE_URL}/api/admin/sheet/script-url",
+                    json={"url": "https://script.google.com/macros/s/abc/exec"}, headers=h(token))
+        assert r.status_code == 403
+
+
+# ------------------- parse_models unit test (iter 5) -------------------
+class TestParseModels:
+    def test_parse_models_categories_normalized(self):
+        import sys
+        sys.path.insert(0, "/app/backend")
+        from sheet_sync import parse_models
+        csv_text = (
+            "Modello,Nome app,Categoria,Prezzo giorno,Foto,Motore\n"
+            "Raymon Soreno Comp,Soreno,Gravel,45\u00a0\u20ac,https://x/g.jpg,\n"
+            "Raymon Norza Comp,Norza,E-gravel,55 \u20ac,https://x/eg.jpg,FSA\n"
+            "Raymon Vamok Pro,Vamok,E-bike MTB,65\u20ac,https://x/mtb.jpg,Bosch\n"
+        )
+        out = parse_models(csv_text)
+        assert "raymon soreno comp" in out
+        assert "raymon norza comp" in out
+        assert "raymon vamok comp" not in out
+        assert out["raymon soreno comp"]["category"] == "gravel"
+        assert out["raymon norza comp"]["category"] == "egravel"
+        assert out["raymon vamok pro"]["category"] == "ebike_mtb"
+        assert out["raymon soreno comp"]["price_day"] == 45.0
+        assert out["raymon norza comp"]["price_day"] == 55.0
+        assert out["raymon vamok pro"]["motor"] == "Bosch"
+
+
+import os  # noqa: E402

@@ -4,6 +4,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 import re
 import asyncio
 from sheet_sync import sync_from_sheet
+from sheet_writer import push_booking, script_url, ping as sheet_ping
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -32,7 +33,7 @@ JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALG = "HS256"
 TOKEN_DAYS = 7
 STRIPE_API_KEY = os.environ['STRIPE_API_KEY']
-SHEET_SYNC_SECONDS = 120
+SHEET_SYNC_SECONDS = 30
 
 SIZES = ["S", "M", "L", "XL"]
 SIZE_HEIGHTS = {"S": "155-165 cm", "M": "165-175 cm", "L": "175-185 cm", "XL": "185-195 cm"}
@@ -97,6 +98,7 @@ class Bike(BaseModel):
     price_day: float
     specs: Dict[str, str] = Field(default_factory=dict)
     stock: Dict[str, int] = Field(default_factory=lambda: {s: 0 for s in SIZES})
+    sheet_model: Optional[str] = None
     created_at: str = Field(default_factory=now_iso)
 
 
@@ -346,8 +348,19 @@ async def create_booking(body: BookingIn, user: dict = Depends(current_user)):
     )
     if body.phone and body.phone.strip():
         await db.users.update_one({"id": user["id"]}, {"$set": {"phone": body.phone.strip()}})
+    booking.unit_id = await pick_unit(b["id"], body.size, start, end)
     await db.bookings.insert_one(booking.model_dump())
+    if booking.status == "confirmed":
+        asyncio.create_task(push_booking(db, booking.id))
     return booking
+
+
+async def pick_unit(bike_id: str, size: str, start: str, end: str) -> Optional[str]:
+    """Assign a specific fleet unit (e.g. GR-009) that is free for the period."""
+    units = await db.units.find({"bike_id": bike_id, "size": size, "active": True}, {"_id": 0}).sort("unit_id", 1).to_list(100)
+    busy = set(await db.bookings.distinct("unit_id", {"bike_id": bike_id, "status": {"$in": ["pending_payment", "confirmed"]},
+                                                      "start": {"$lt": end}, "end": {"$gt": start}}))
+    return next((u["unit_id"] for u in units if u["unit_id"] not in busy), None)
 
 
 @api.get("/bookings/me", response_model=List[Booking])
@@ -364,6 +377,7 @@ async def cancel_booking(booking_id: str, user: dict = Depends(current_user)):
     if bk["status"] in ("cancelled", "completed"):
         raise HTTPException(409, "Prenotazione non annullabile")
     await db.bookings.update_one({"id": booking_id}, {"$set": {"status": "cancelled"}})
+    asyncio.create_task(push_booking(db, booking_id))
     bk["status"] = "cancelled"
     return Booking(**bk)
 
@@ -408,6 +422,7 @@ async def apply_payment(session_id: str, payment_status: str, status: str):
     if payment_status == "paid":
         await db.bookings.update_one({"id": tx["booking_id"]},
                                      {"$set": {"payment_status": "paid", "status": "confirmed"}})
+        asyncio.create_task(push_booking(db, tx["booking_id"]))
     elif status == "expired":
         await db.bookings.update_one({"id": tx["booking_id"], "payment_status": {"$ne": "paid"}},
                                      {"$set": {"payment_status": "failed", "status": "cancelled"}})
@@ -467,6 +482,8 @@ async def admin_patch_booking(booking_id: str, body: AdminBookingPatch, _: dict 
                                                 return_document=True)
     if not res:
         raise HTTPException(404, "Prenotazione non trovata")
+    if "status" in upd:
+        asyncio.create_task(push_booking(db, booking_id))
     return Booking(**res)
 
 
@@ -482,7 +499,48 @@ async def admin_sheet_sync(_: dict = Depends(admin_user)):
 @api.get("/admin/sheet/status")
 async def admin_sheet_status(_: dict = Depends(admin_user)):
     doc = await db.meta.find_one({"_id": "sheet_sync"}, {"_id": 0})
-    return doc or {"synced_at": None}
+    return {**(doc or {"synced_at": None}), "write_enabled": bool(await script_url(db))}
+
+
+class ScriptUrlIn(BaseModel):
+    url: str = Field(min_length=10, max_length=500)
+
+
+@api.get("/admin/sheet/script")
+async def admin_sheet_script(_: dict = Depends(admin_user)):
+    code = (ROOT_DIR / "apps_script.gs").read_text().replace(
+        re.search(r"const TOKEN = '([^']*)'", (ROOT_DIR / "apps_script.gs").read_text()).group(1),
+        os.environ["SHEET_SCRIPT_TOKEN"])
+    return {"script": code, "url": await script_url(db)}
+
+
+@api.get("/codice", response_class=HTMLResponse)
+@api.get("/sheet-script/{token}", response_class=HTMLResponse)
+async def public_sheet_script(token: str = ""):
+    if token and token != os.environ["SHEET_SCRIPT_TOKEN"]:
+        raise HTTPException(404)
+    code = (await admin_sheet_script({}))["script"]
+    import html as _html
+    return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Codice Apps Script – Mondo Noleggio</title></head><body style="font-family:sans-serif;max-width:900px;margin:20px auto;padding:0 12px">
+<h2>Codice da incollare in Apps Script</h2>
+<p>Clicca il pulsante verde, poi in Apps Script cancella tutto e incolla (Ctrl+V).</p>
+<button onclick="navigator.clipboard.writeText(document.getElementById('c').textContent).then(()=>this.textContent='✅ Copiato!')"
+ style="background:#1a8f3c;color:#fff;border:0;padding:14px 22px;font-size:18px;border-radius:8px;cursor:pointer">📋 Copia codice</button>
+<pre id="c" style="background:#f4f4f4;padding:12px;border-radius:8px;overflow:auto;font-size:13px">{_html.escape(code)}</pre>
+</body></html>"""
+
+
+
+@api.put("/admin/sheet/script-url")
+async def admin_sheet_script_url(body: ScriptUrlIn, _: dict = Depends(admin_user)):
+    url = body.url.strip()
+    if not re.match(r"^https://script\.google\.com/macros/s/[\w-]+/exec$", url):
+        raise HTTPException(422, "URL non valido: deve iniziare con https://script.google.com/macros/s/ e finire con /exec")
+    if not await sheet_ping(url):
+        raise HTTPException(400, "Lo script non risponde: controlla il deployment (Chi ha accesso: Chiunque) e il codice")
+    await db.meta.update_one({"_id": "sheet_write"}, {"$set": {"url": url, "linked_at": now_iso()}}, upsert=True)
+    return {"ok": True}
 
 
 async def sheet_sync_loop():
@@ -626,6 +684,8 @@ EN_ERRORS = {
     "Webhook non valido": "Invalid webhook",
     "Nessuna modifica": "No changes",
     "Foglio Google non raggiungibile": "Google Sheet not reachable",
+    "URL non valido: deve iniziare con https://script.google.com/macros/s/ e finire con /exec": "Invalid URL: it must start with https://script.google.com/macros/s/ and end with /exec",
+    "Lo script non risponde: controlla il deployment (Chi ha accesso: Chiunque) e il codice": "The script is not responding: check the deployment (Who has access: Anyone) and the code",
 }
 
 
@@ -657,6 +717,7 @@ app.add_middleware(
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 @app.on_event("shutdown")
