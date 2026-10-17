@@ -54,3 +54,4 @@ App scaricabile da tutti per gestire la giacenza di bici a noleggio (gravel, e-b
 - Review request email day after return (12:00 Rome) with Google review link https://g.page/r/CRrkPKDBIM0oEBM/review
 - WhatsApp 'Scrivici' button (wa.me/393289832243) next to 'Come arrivare' on home + bookings (ShopContactRow)
 - 'Percorsi' tab (app/(tabs)/routes.tsx) with link to Strava profile https://www.strava.com/athletes/15242190 (user chose simple link, no API)
+- Instagram button 'Seguici su Instagram' (instagram.com/chientibike) in Percorsi tab

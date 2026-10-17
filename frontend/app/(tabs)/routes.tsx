@@ -8,6 +8,8 @@ import { makeStyles, useTheme } from "@/src/theme";
 
 const STRAVA_URL = "https://www.strava.com/athletes/15242190";
 const STRAVA_ORANGE = "#FC4C02"; // Strava brand colour, same in light and dark
+const INSTAGRAM_URL = "https://www.instagram.com/chientibike/";
+const INSTAGRAM_PINK = "#E1306C"; // Instagram brand colour, same in light and dark
 
 export default function RoutesScreen() {
   const insets = useSafeAreaInsets();
@@ -37,6 +39,16 @@ export default function RoutesScreen() {
           <Text style={styles.stravaText}>{t("routes_strava")}</Text>
           <Ionicons name="open-outline" size={18} color="#FFFFFF" />
         </Pressable>
+        <Pressable
+          testID="instagram-link-button"
+          accessibilityRole="link"
+          onPress={() => Linking.openURL(INSTAGRAM_URL)}
+          style={({ pressed }) => [styles.strava, { backgroundColor: INSTAGRAM_PINK }, pressed && { opacity: 0.85 }]}
+        >
+          <Ionicons name="logo-instagram" size={24} color="#FFFFFF" />
+          <Text style={styles.stravaText}>{t("routes_instagram")}</Text>
+          <Ionicons name="open-outline" size={18} color="#FFFFFF" />
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -46,7 +58,7 @@ const useStyles = makeStyles((c) => ({
   root: { flex: 1, backgroundColor: c.surfaceSecondary },
   header: { paddingHorizontal: 24, paddingBottom: 12, backgroundColor: c.surface, borderBottomWidth: 0.5, borderBottomColor: c.border },
   title: { fontSize: 28, fontWeight: "800", color: c.onSurface, letterSpacing: -0.5 },
-  body: { padding: 24, gap: 24 },
+  body: { padding: 24, gap: 16 },
   hero: { backgroundColor: c.surface, borderRadius: 20, padding: 24, gap: 12, alignItems: "center" },
   heroTitle: { fontSize: 20, fontWeight: "800", color: c.onSurface, textAlign: "center" },
   heroText: { fontSize: 15, color: c.onSurfaceTertiary, textAlign: "center", lineHeight: 22 },
