@@ -6,7 +6,7 @@ import { useI18n } from "@/src/i18n";
 import { usesNativeTabs } from "@/src/navigation";
 import { makeStyles, useTheme } from "@/src/theme";
 
-const STRAVA_URL = "https://www.strava.com/athletes/15242190";
+const STRAVA_URL = "https://www.strava.com/athlete/routes";
 const STRAVA_ORANGE = "#FC4C02"; // Strava brand colour, same in light and dark
 const INSTAGRAM_URL = "https://www.instagram.com/chientibike/";
 const INSTAGRAM_PINK = "#E1306C"; // Instagram brand colour, same in light and dark

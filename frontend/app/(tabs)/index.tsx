@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
@@ -8,8 +8,8 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 
-import { api, type Bike, type Category, type Size } from "@/src/api";
-import { CATEGORY_LABELS, SIZES, SIZE_HEIGHTS, euro } from "@/src/format";
+import { api, type Bike, type Category } from "@/src/api";
+import { CATEGORY_LABELS, SIZES, euro } from "@/src/format";
 import { Button, Chip } from "@/src/components/ui";
 import { ShopContactRow } from "@/src/components/DirectionsButton";
 import { useAuth } from "@/src/auth";
@@ -27,7 +27,6 @@ export default function CatalogScreen() {
   const { user } = useAuth();
   const { t } = useI18n();
   const [cat, setCat] = useState<Category | "all">("all");
-  const [size, setSize] = useState<Size | null>(null);
   const bottomChrome = usesNativeTabs ? insets.bottom : 0;
 
   const q = useQuery({
@@ -35,10 +34,7 @@ export default function CatalogScreen() {
     queryFn: () => api<Bike[]>(`/bikes${cat === "all" ? "" : `?category=${cat}`}`),
   });
 
-  const bikes = useMemo(
-    () => (q.data ?? []).filter((b) => (size ? (b.stock[size] ?? 0) > 0 : true)),
-    [q.data, size],
-  );
+  const bikes = q.data ?? [];
 
   return (
     <View style={styles.root}>
@@ -73,24 +69,6 @@ export default function CatalogScreen() {
               label={c === "all" ? t("all") : CATEGORY_LABELS[c]}
               selected={cat === c}
               onPress={() => setCat(c)}
-            />
-          ))}
-        </ScrollView>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.chipRow}
-          contentContainerStyle={styles.chipRowContent}
-        >
-          <Text style={styles.sizeLabel}>{t("size")}</Text>
-          <Chip testID="size-filter-all" label={t("all")} selected={size === null} onPress={() => setSize(null)} />
-          {SIZES.map((s) => (
-            <Chip
-              key={s}
-              testID={`size-filter-${s}`}
-              label={`${s} · ${SIZE_HEIGHTS[s]}`}
-              selected={size === s}
-              onPress={() => setSize(s)}
             />
           ))}
         </ScrollView>
@@ -177,7 +155,6 @@ const useStyles = makeStyles((c) => ({
   avatarImg: { width: 44, height: 44 },
   chipRow: { flexGrow: 0, height: 52 },
   chipRowContent: { gap: 8, paddingHorizontal: 24, alignItems: "center" },
-  sizeLabel: { fontSize: 13, fontWeight: "700", color: c.muted, marginRight: 4 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 32, minHeight: 300 },
   muted: { color: c.muted, fontSize: 14 },
   list: { padding: 16, paddingHorizontal: 24, gap: 20 },
