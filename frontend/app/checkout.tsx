@@ -11,6 +11,7 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { api, imageUri, type Bike, type Booking, type Quote } from "@/src/api";
 import { Button } from "@/src/components/ui";
 import { ContractModal, useContract } from "@/src/components/ContractModal";
+import { CustomerForm, EMPTY_CUSTOMER, customerErrors, fromIsoDate, toIsoDate, type Customer } from "@/src/components/CustomerForm";
 import { SIZE_HEIGHTS, euro, fmtRange, fmtUnits } from "@/src/format";
 import { useI18n } from "@/src/i18n";
 import { startStripePayment } from "@/src/payments";
@@ -28,13 +29,21 @@ export default function Checkout() {
   const toast = useToast();
   const qc = useQueryClient();
   const { t } = useI18n();
+  const { user } = useAuth();
   const [method, setMethod] = useState<Method>("store");
   const contractQ = useContract();
   const [contractOpen, setContractOpen] = useState(false);
   const [acceptedVersion, setAcceptedVersion] = useState<string | null>(null);
   const contractOk = !!acceptedVersion && acceptedVersion === contractQ.data?.version;
+  const savedCustomer = useQuery({ queryKey: ["my-customer"], queryFn: () => api<Partial<Customer>>("/me/customer") });
+  const [draft, setCustomer] = useState<Customer | null>(null);
+  const saved = savedCustomer.data;
+  const customer: Customer = draft ?? (saved && Object.keys(saved).length
+    ? ({ ...EMPTY_CUSTOMER, ...saved, birth_date: fromIsoDate(saved.birth_date ?? "") } as Customer)
+    : { ...EMPTY_CUSTOMER, full_name: user?.name ?? "" });
+  const [showCustErrors, setShowCustErrors] = useState(false);
+  const customerOk = customerErrors(customer).length === 0;
   const [busy, setBusy] = useState(false);
-  const { user } = useAuth();
   const [phone, setPhone] = useState(user?.phone ?? "");
   const phoneOk = phone.replace(/\D/g, "").length >= 6;
 
@@ -53,12 +62,19 @@ export default function Checkout() {
   });
 
   const confirm = async () => {
+    if (!customerOk) {
+      setShowCustErrors(true);
+      toast(t("cust_invalid"), "error");
+      return;
+    }
     setBusy(true);
     try {
       const booking = await api<Booking>("/bookings", { method: "POST", body: {
         ...body, payment_method: method, phone: phone.trim(),
         contract_accepted: true, clauses_approved: true, privacy_accepted: true, contract_version: acceptedVersion,
+        customer: { ...customer, birth_date: toIsoDate(customer.birth_date), tax_code: customer.tax_code.trim().toUpperCase() },
       } });
+      qc.invalidateQueries({ queryKey: ["my-customer"] });
       qc.invalidateQueries({ queryKey: ["my-bookings"] });
       qc.invalidateQueries({ queryKey: ["quote"] });
       if (method === "store") {
@@ -158,6 +174,8 @@ export default function Checkout() {
               </Pressable>
             );
           })}
+          <Text style={styles.section}>{t("cust_title")}</Text>
+          <CustomerForm value={customer} onChange={setCustomer} showErrors={showCustErrors} />
           <Text style={styles.section}>{t("contract_title")}</Text>
           <Pressable
             testID="contract-open"

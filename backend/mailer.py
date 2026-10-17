@@ -92,10 +92,13 @@ def _assert_safe_email(subject: str, html: str) -> None:
                 raise ValueError(f"Anchor text {m.group(1)!r} ≠ real link host {real!r} (G3)")
 
 
-async def send_email(*, to: str, subject: str, html: str) -> bool:
-    """Background-safe send: logs failures instead of raising."""
+async def send_email(*, to: str, subject: str, html: str, attachments: list | None = None) -> bool:
+    """Background-safe send: logs failures instead of raising.
+    attachments: [{"filename": "x.pdf", "content": base64 string}]"""
     _assert_safe_email(subject, html)
     payload = {"to": [to], "subject": subject, "html": html, "from_name": os.environ["EMAIL_FROM_NAME"]}
+    if attachments:
+        payload["attachments"] = attachments
     if os.environ.get("EMAIL_REPLY_TO"):
         payload["contact_email"] = os.environ["EMAIL_REPLY_TO"]
     try:
@@ -174,12 +177,42 @@ def _subject(prefix: str, bk: dict) -> str:
     return f"{prefix}{' ' + code if code else ''} – {os.environ['EMAIL_FROM_NAME']}"
 
 
+def contract_url(bk: dict) -> str:
+    """First-party https link to the filled contract PDF (signed, booking-scoped token)."""
+    base = bk.get("public_base") or ""
+    if not base.startswith("https://") or not bk.get("contract_version"):
+        return ""
+    from server import contract_link_token  # local import: server imports this module
+    return f"{base}/api/bookings/{bk['id']}/contract.pdf?t={contract_link_token(bk['id'])}"
+
+
+def _contract_block(bk: dict) -> str:
+    if not bk.get("contract_accepted_at"):
+        return ""
+    from contract_pdf import _ts
+    url = contract_url(bk)
+    btn = (f'<p style="margin:16px 0"><a href="{escape(url)}" style="background:#1a8f3c;color:#ffffff;'
+           'text-decoration:none;font-weight:bold;padding:12px 20px;border-radius:10px;display:inline-block">'
+           '📄 Scarica il contratto (PDF)</a></p>') if url else ""
+    return (f'<p>Hai accettato il contratto di noleggio in app il <strong>{escape(_ts(bk["contract_accepted_at"]))}</strong> '
+            '(ora italiana). Lo trovi in allegato in PDF, già compilato con i tuoi dati.</p>' + btn)
+
+
+def contract_attachment(bk: dict, lines: list | None) -> list:
+    if not lines or not bk.get("contract_accepted_at"):
+        return []
+    import base64
+    from contract_pdf import build_contract_pdf
+    pdf = build_contract_pdf(bk, lines)
+    return [{"filename": f"contratto-{bk.get('sheet_id') or bk['id'][:8]}.pdf", "content": base64.b64encode(pdf).decode()}]
+
+
 def booking_email(bk: dict) -> tuple[str, str]:
     brand = escape(os.environ["EMAIL_FROM_NAME"])
     html = _card("Prenotazione confermata 🚲",
                  f'Ciao {escape(bk["user_name"])}, grazie per aver prenotato con {brand}! Ecco il riepilogo:',
                  _rows(bk),
-                 "<p>Hai accettato il contratto di noleggio in app. Porta con te un documento d'identità al momento del ritiro.</p>"
+                 _contract_block(bk) + "<p>Porta con te un documento d'identità al momento del ritiro.</p>"
                  + _contact())
     return _subject("Prenotazione confermata", bk), html
 
@@ -189,7 +222,8 @@ def shop_email(bk: dict) -> tuple[str, str]:
                  "È arrivata una nuova prenotazione confermata:",
                  _rows(bk, [("Cliente", bk["user_name"]), ("Email cliente", bk["user_email"]),
                             ("Telefono", bk.get("phone")), ("Unità assegnata", bk.get("unit_id")),
-                            ("Contratto", "Accettato in app ✅" if bk.get("contract_accepted_at") else None)]))
+                            ("Contratto", "Accettato in app ✅ (PDF in allegato)" if bk.get("contract_accepted_at") else None),
+                            ("Codice fiscale", (bk.get("customer") or {}).get("tax_code"))]))
     return _subject("Nuova prenotazione", bk), html
 
 
@@ -217,7 +251,8 @@ def review_email(bk: dict) -> tuple[str, str]:
     return f"Com'è andato il tuo noleggio? – {os.environ['EMAIL_FROM_NAME']}", html
 
 
-async def _send_once(db, booking_id: str, flag: str, query: dict, build, to_field: str | None) -> None:
+async def _send_once(db, booking_id: str, flag: str, query: dict, build, to_field: str | None,
+                     with_contract: bool = False) -> None:
     """Atomically claim `flag` on the booking, send, and release the claim if sending fails."""
     bk = await db.bookings.find_one_and_update({"id": booking_id, flag: {"$ne": True}, **query},
                                                {"$set": {flag: True}}, projection={"_id": 0})
@@ -227,7 +262,14 @@ async def _send_once(db, booking_id: str, flag: str, query: dict, build, to_fiel
     if not to:
         return
     subject, html = build(bk)
-    if not await send_email(to=to, subject=subject, html=html):
+    attachments = []
+    if with_contract and bk.get("contract_version"):
+        c = await db.contracts.find_one({"version": bk["contract_version"]}, {"_id": 0, "lines": 1})
+        try:
+            attachments = await asyncio.to_thread(contract_attachment, bk, (c or {}).get("lines"))
+        except Exception as e:
+            logger.warning("Contract PDF failed for %s: %s", booking_id, e)
+    if not await send_email(to=to, subject=subject, html=html, attachments=attachments):
         await db.bookings.update_one({"id": booking_id}, {"$set": {flag: False}})
 
 
@@ -235,8 +277,8 @@ async def on_booking_confirmed(db, booking_id: str):
     """Write the booking to the sheet (to get the NOL code), then email the customer and the shop once."""
     await push_booking(db, booking_id)
     q = {"status": "confirmed"}
-    await _send_once(db, booking_id, "confirmation_email_sent", q, booking_email, "user_email")
-    await _send_once(db, booking_id, "shop_email_sent", q, shop_email, None)
+    await _send_once(db, booking_id, "confirmation_email_sent", q, booking_email, "user_email", with_contract=True)
+    await _send_once(db, booking_id, "shop_email_sent", q, shop_email, None, with_contract=True)
 
 
 async def send_due_reminders(db) -> int:

@@ -9,6 +9,7 @@ from mailer import on_booking_confirmed, reminder_loop
 from enricher import enrich_bike, enrich_new_bikes, lookup as web_lookup
 import storage
 from contract import get_contract
+from contract_pdf import build_contract_pdf
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -143,7 +144,22 @@ class Booking(BaseModel):
     phone: Optional[str] = None
     contract_version: Optional[str] = None
     contract_accepted_at: Optional[str] = None
+    customer: Optional[Dict[str, str]] = None
     created_at: str = Field(default_factory=now_iso)
+
+
+class CustomerIn(BaseModel):
+    """Customer data printed in section 1 of the rental contract."""
+    full_name: str = Field(min_length=3, max_length=100)
+    tax_code: str = Field(min_length=11, max_length=20)  # codice fiscale (or foreign tax id)
+    birth_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    address: str = Field(min_length=3, max_length=150)
+    city_zip: str = Field(min_length=3, max_length=100)
+    nationality: str = Field(min_length=2, max_length=60)
+    doc_type: Literal["ci", "patente", "passaporto"]
+    doc_number: str = Field(min_length=4, max_length=30)
+    doc_issuer_expiry: str = Field(min_length=3, max_length=100)
+    emergency_contact: str = Field(default="", max_length=100)
 
 
 class BookingIn(BaseModel):
@@ -158,6 +174,7 @@ class BookingIn(BaseModel):
     clauses_approved: bool = False  # specific approval, artt. 1341-1342 c.c.
     privacy_accepted: bool = False
     contract_version: Optional[str] = Field(default=None, max_length=64)
+    customer: Optional[CustomerIn] = None
 
 
 class CheckoutIn(BaseModel):
@@ -200,6 +217,8 @@ async def current_user(request: Request) -> dict:
         payload = jwt.decode(auth[7:], JWT_SECRET, algorithms=[JWT_ALG])
     except jwt.InvalidTokenError:
         raise HTTPException(401, "Sessione scaduta")
+    if payload.get("purpose"):  # e.g. contract download links are not login tokens
+        raise HTTPException(401, "Non autenticato")
     user = await db.users.find_one({"id": payload.get("sub")}, {"_id": 0})
     if not user:
         raise HTTPException(401, "Utente non trovato")
@@ -363,14 +382,58 @@ async def rental_contract():
         raise HTTPException(503, "Contratto non disponibile al momento, riprova tra poco")
 
 
+def contract_link_token(booking_id: str) -> str:
+    now = datetime.now(timezone.utc)
+    return jwt.encode({"sub": booking_id, "purpose": "contract", "iat": now, "exp": now + timedelta(days=180)},
+                      JWT_SECRET, algorithm=JWT_ALG)
+
+
+def public_base(request: Request) -> str:
+    """Public https origin the customer used (behind the ingress), for links in emails."""
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+    return f"https://{host.split(',')[0].strip()}" if host else ""
+
+
+@api.get("/me/customer")
+async def my_customer_data(user: dict = Depends(current_user)):
+    """Contract data saved from the last booking, to prefill the next one."""
+    return user.get("customer") or {}
+
+
+@api.get("/bookings/{booking_id}/contract.pdf")
+async def booking_contract_pdf(booking_id: str, request: Request, t: Optional[str] = None):
+    """Filled contract PDF. Auth: link token from the email (?t=) or the owner's/admin's Bearer token."""
+    bk = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    allowed = False
+    if t:
+        try:
+            p = jwt.decode(t, JWT_SECRET, algorithms=[JWT_ALG])
+            allowed = p.get("purpose") == "contract" and p.get("sub") == booking_id
+        except jwt.InvalidTokenError:
+            allowed = False
+    else:
+        user = await current_user(request)
+        allowed = bool(bk) and (bk["user_id"] == user["id"] or user.get("role") == "admin")
+    if not allowed or not bk:
+        raise HTTPException(404, "Contratto non trovato")
+    contract = await db.contracts.find_one({"version": bk.get("contract_version")}, {"_id": 0, "lines": 1})
+    if not contract:
+        raise HTTPException(404, "Contratto non trovato")
+    pdf = await asyncio.to_thread(build_contract_pdf, bk, contract["lines"])
+    name = f"contratto-{bk.get('sheet_id') or booking_id[:8]}.pdf"
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
+
+
 @api.post("/bookings")
-async def create_booking(body: BookingIn, user: dict = Depends(current_user)):
+async def create_booking(body: BookingIn, request: Request, user: dict = Depends(current_user)):
     if body.payment_method == "stripe" and os.environ.get("CARD_PAYMENTS_ENABLED", "false").lower() != "true":
         raise HTTPException(400, "Il pagamento con carta sarà disponibile a breve: scegli il pagamento in negozio")
     if not (body.contract_accepted and body.clauses_approved and body.privacy_accepted and body.contract_version):
         raise HTTPException(400, "Per prenotare devi accettare il contratto di noleggio")
     if not await db.contracts.find_one({"version": body.contract_version}, {"_id": 1}):
         raise HTTPException(409, "Il contratto è stato aggiornato: rileggilo e accettalo di nuovo")
+    if not body.customer:
+        raise HTTPException(400, "Compila i dati per il contratto (codice fiscale e documento)")
     b = await db.bikes.find_one({"id": body.bike_id}, {"_id": 0})
     if not b:
         raise HTTPException(404, "Bici non trovata")
@@ -388,11 +451,13 @@ async def create_booking(body: BookingIn, user: dict = Depends(current_user)):
         status="pending_payment" if body.payment_method == "stripe" else "confirmed",
         phone=(body.phone or "").strip() or user.get("phone"),
         contract_version=body.contract_version, contract_accepted_at=now_iso(),
+        customer={k: v.strip() for k, v in body.customer.model_dump().items()},
     )
+    await db.users.update_one({"id": user["id"]}, {"$set": {"customer": booking.customer}})
     if body.phone and body.phone.strip():
         await db.users.update_one({"id": user["id"]}, {"$set": {"phone": body.phone.strip()}})
     booking.unit_id = await pick_unit(b["id"], body.size, start, end)
-    await db.bookings.insert_one(booking.model_dump())
+    await db.bookings.insert_one({**booking.model_dump(), "public_base": public_base(request)})
     if booking.status == "confirmed":
         asyncio.create_task(on_booking_confirmed(db, booking.id))
     return booking
