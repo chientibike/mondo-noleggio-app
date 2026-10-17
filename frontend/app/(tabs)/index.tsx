@@ -8,7 +8,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 
-import { api, type Bike, type Category } from "@/src/api";
+import { api, imageUri, type Bike, type Category } from "@/src/api";
 import { CATEGORY_LABELS, SIZES, euro } from "@/src/format";
 import { Button, Chip } from "@/src/components/ui";
 import { ShopContactRow } from "@/src/components/DirectionsButton";
@@ -116,7 +116,7 @@ function BikeCard({ bike, index, onPress }: { bike: Bike; index: number; onPress
       <Pressable testID={`bike-card-${bike.id}`} onPress={onPress} style={({ pressed }) => [styles.card, pressed && { transform: [{ scale: 0.985 }] }]}>
         <View style={styles.imgWrap}>
           {bike.image_url ? (
-            <Image source={{ uri: bike.image_url }} style={styles.img} contentFit="cover" transition={200} />
+            <Image source={{ uri: imageUri(bike.image_url) }} style={styles.img} contentFit="cover" transition={200} />
           ) : (
             <View style={[styles.img, styles.noImg]} testID={`bike-card-noimg-${bike.id}`}>
               <Ionicons name="bicycle" size={64} color={colors.muted} />

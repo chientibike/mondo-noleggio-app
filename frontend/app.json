@@ -9,14 +9,21 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.bicidisponibili.s7un1w"
+      "bundleIdentifier": "com.emergent.bicidisponibili.s7un1w",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Take bike photos to show customers",
+        "NSPhotoLibraryUsageDescription": "Choose bike photos to show customers"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.emergent.bicidisponibili.s7un1w"
+      "package": "com.emergent.bicidisponibili.s7un1w",
+      "permissions": [
+        "CAMERA"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -39,7 +46,14 @@
       "expo-secure-store",
       "expo-web-browser",
       "expo-status-bar",
-      "@react-native-vector-icons/ionicons"
+      "@react-native-vector-icons/ionicons",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Choose bike photos to show customers",
+          "cameraPermission": "Take bike photos to show customers"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

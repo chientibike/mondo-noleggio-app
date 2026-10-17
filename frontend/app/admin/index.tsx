@@ -6,7 +6,7 @@ import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 
-import { api, type Bike, type Booking } from "@/src/api";
+import { api, imageUri, type Bike, type Booking } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Badge, Button, Chip } from "@/src/components/ui";
 import { CATEGORY_LABELS, PAYMENT_LABELS, SIZES, STATUS_LABELS, euro, fmtRange, statusTone } from "@/src/format";
@@ -159,7 +159,7 @@ export default function Admin() {
           renderItem={({ item }) => (
             <View style={styles.card} testID={`admin-bike-${item.id}`}>
               <View style={styles.cardTop}>
-                <Image source={{ uri: item.image_url }} style={styles.thumb} contentFit="cover" />
+                <Image source={{ uri: imageUri(item.image_url) }} style={styles.thumb} contentFit="cover" />
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
                   <Text style={styles.meta}>{CATEGORY_LABELS[item.category]} · {euro(item.price_day)}{t("per_day")}</Text>

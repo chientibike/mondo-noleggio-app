@@ -8,7 +8,7 @@ import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 
-import { api, type Bike, type Booking, type Quote } from "@/src/api";
+import { api, imageUri, type Bike, type Booking, type Quote } from "@/src/api";
 import { Button } from "@/src/components/ui";
 import { SIZE_HEIGHTS, euro, fmtRange, fmtUnits } from "@/src/format";
 import { useI18n } from "@/src/i18n";
@@ -98,7 +98,7 @@ export default function Checkout() {
       ) : (
         <KeyboardAwareScrollView bottomOffset={120} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}>
           <View style={styles.summary} testID="checkout-summary">
-            <Image source={{ uri: bike.image_url }} style={styles.thumb} contentFit="cover" />
+            <Image source={{ uri: imageUri(bike.image_url) }} style={styles.thumb} contentFit="cover" />
             <View style={{ flex: 1, gap: 4 }}>
               <Text style={styles.bikeName}>{bike.name}</Text>
               <Text style={styles.meta}>{t("size_x", { s: p.size })} · {SIZE_HEIGHTS[p.size as keyof typeof SIZE_HEIGHTS]}</Text>

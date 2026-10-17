@@ -7,8 +7,9 @@ import { KeyboardAwareScrollView, KeyboardStickyView } from "react-native-keyboa
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 
-import { api, CATEGORY_PRICES, type Bike, type Category, type Size } from "@/src/api";
+import { api, imageUri, CATEGORY_PRICES, type Bike, type Category, type Size } from "@/src/api";
 import { Button, Chip } from "@/src/components/ui";
+import { PhotoPicker } from "@/src/components/PhotoPicker";
 import { CATEGORY_LABELS, SIZES, SIZE_HEIGHTS, SPEC_KEYS } from "@/src/format";
 import { useToast } from "@/src/toast";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -121,7 +122,7 @@ export default function BikeForm() {
         <Text style={styles.title}>{id ? t("edit_bike") : t("new_bike")}</Text>
       </View>
       <KeyboardAwareScrollView bottomOffset={100} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}>
-        {!!imageUrl && <Image source={{ uri: imageUrl }} style={styles.preview} contentFit="cover" />}
+        {!!imageUrl && <Image source={{ uri: imageUri(imageUrl) }} style={styles.preview} contentFit="cover" />}
         <View style={styles.lookupBox}>
           <Field label={t("model_year")}>
             <TextInput
@@ -191,6 +192,9 @@ export default function BikeForm() {
               </View>
             ))}
           </View>
+        </Field>
+        <Field label={t("photo")}>
+          <PhotoPicker onUploaded={setImageUrl} disabled={busy || searching} />
         </Field>
         <Field label={t("image_url")}>
           <TextInput testID="bike-form-image" style={styles.input} value={imageUrl} onChangeText={setImageUrl} autoCapitalize="none" placeholder="https://..." placeholderTextColor={colors.muted} />

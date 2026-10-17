@@ -8,7 +8,7 @@ import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 
-import { api, type Bike, type Quote, type Size } from "@/src/api";
+import { api, imageUri, type Bike, type Quote, type Size } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Button, Chip } from "@/src/components/ui";
 import { CATEGORY_LABELS, CLOSE_HOUR, OPEN_HOUR, SIZES, SIZE_HEIGHTS, SPEC_KEYS, euro, fmtUnits, nextDays, specValue } from "@/src/format";
@@ -97,7 +97,7 @@ export default function BikeDetail() {
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 120 }} testID="bike-detail-scroll">
         <View style={styles.hero}>
           {bike.image_url ? (
-            <Image source={{ uri: bike.image_url }} style={styles.heroImg} contentFit="cover" transition={200} />
+            <Image source={{ uri: imageUri(bike.image_url) }} style={styles.heroImg} contentFit="cover" transition={200} />
           ) : (
             <View style={[styles.heroImg, styles.noImg]}>
               <Ionicons name="bicycle" size={96} color={colors.muted} />

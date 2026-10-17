@@ -1,5 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, Query
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, Query, UploadFile, File
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 import re
 import asyncio
@@ -7,6 +7,7 @@ from sheet_sync import sync_from_sheet
 from sheet_writer import push_booking, script_url, ping as sheet_ping
 from mailer import on_booking_confirmed, reminder_loop
 from enricher import enrich_bike, enrich_new_bikes, lookup as web_lookup
+import storage
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -599,6 +600,52 @@ async def admin_update_bike(bike_id: str, body: BikeIn, _: dict = Depends(admin_
     return Bike(**res)
 
 
+IMAGE_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic", "image/heif": "heif"}
+MAX_PHOTO_BYTES = 10 * 1024 * 1024
+
+
+@api.post("/admin/upload")
+async def admin_upload_photo(file: UploadFile = File(...), user: dict = Depends(admin_user)):
+    """Upload a bike photo (camera or gallery). Returns the public URL to store as image_url."""
+    ctype = (file.content_type or "").lower()
+    if ctype not in IMAGE_TYPES:
+        raise HTTPException(400, "Formato non supportato: usa una foto JPG, PNG, WEBP o HEIC")
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "File vuoto")
+    if len(data) > MAX_PHOTO_BYTES:
+        raise HTTPException(413, "Foto troppo grande (massimo 10 MB)")
+    fid = uuid.uuid4().hex
+    path = f"{storage.APP_NAME}/bikes/{fid}.{IMAGE_TYPES[ctype]}"
+    try:
+        res = await storage.put_object(path, data, ctype)
+    except Exception as e:
+        status = getattr(getattr(e, "response", None), "status_code", None)
+        logger.warning("Photo upload failed (%s): %s", status, e)
+        if status == 402:
+            raise HTTPException(402, "Spazio di archiviazione esaurito: ricarica il credito e riprova")
+        raise HTTPException(502, "Caricamento non riuscito, riprova")
+    await db.files.insert_one({"id": fid, "storage_path": res.get("path", path), "content_type": ctype,
+                               "size": len(data), "original_name": file.filename, "owner_id": user["id"],
+                               "public": True, "is_deleted": False, "created_at": now_iso()})
+    return {"url": f"/api/files/{fid}"}
+
+
+@api.get("/files/{file_id}")
+async def get_file(file_id: str):
+    """Public read for bike photos (the catalog is visible to everyone)."""
+    f = await db.files.find_one({"id": file_id, "public": True, "is_deleted": False}, {"_id": 0})
+    if not f:
+        raise HTTPException(404, "File non trovato")
+    try:
+        data, ctype = await storage.get_object(f["storage_path"])
+    except Exception as e:
+        logger.warning("Photo read failed for %s: %s", file_id, e)
+        raise HTTPException(502, "Foto non disponibile")
+    return Response(content=data, media_type=f.get("content_type") or ctype,
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
 class LookupIn(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     category: Literal["gravel", "egravel", "ebike_mtb"]
@@ -669,6 +716,10 @@ DEMO_BIKE_NAMES = ["Bianchi Arcadex GRX", "Specialized Turbo Creo", "Specialized
 
 @app.on_event("startup")
 async def startup():
+    try:
+        await asyncio.to_thread(storage.init_storage)
+    except Exception as e:
+        logger.warning("Object storage init failed: %s", e)
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id", unique=True)
     await db.bikes.create_index("id", unique=True)

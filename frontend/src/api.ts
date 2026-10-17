@@ -13,6 +13,10 @@ export function setToken(t: string | null) {
 export function getToken() {
   return memToken;
 }
+/** Photos uploaded from the phone are stored as "/api/files/..." on our backend. */
+export function imageUri(url: string) {
+  return url.startsWith("/api/") ? `${BACKEND_URL}${url}` : url;
+}
 export function setUnauthorizedHandler(fn: () => void) {
   onUnauthorized = fn;
 }
