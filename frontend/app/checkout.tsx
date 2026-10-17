@@ -35,7 +35,7 @@ export default function Checkout() {
   const [contractOpen, setContractOpen] = useState(false);
   const [acceptedVersion, setAcceptedVersion] = useState<string | null>(null);
   const contractOk = !!acceptedVersion && acceptedVersion === contractQ.data?.version;
-  const savedCustomer = useQuery({ queryKey: ["my-customer"], queryFn: () => api<Partial<Customer>>("/me/customer") });
+  const savedCustomer = useQuery({ queryKey: ["my-customer", user?.id], queryFn: () => api<Partial<Customer>>("/me/customer"), enabled: !!user });
   const [draft, setCustomer] = useState<Customer | null>(null);
   const saved = savedCustomer.data;
   const customer: Customer = draft ?? (saved && Object.keys(saved).length

@@ -194,7 +194,7 @@ export default function BikeForm() {
           </View>
         </Field>
         <Field label={t("photo")}>
-          <PhotoPicker onUploaded={setImageUrl} disabled={busy || searching} />
+          <PhotoPicker onUploaded={(d) => setImageUrl(d.url)} disabled={busy || searching} />
         </Field>
         <Field label={t("image_url")}>
           <TextInput testID="bike-form-image" style={styles.input} value={imageUrl} onChangeText={setImageUrl} autoCapitalize="none" placeholder="https://..." placeholderTextColor={colors.muted} />

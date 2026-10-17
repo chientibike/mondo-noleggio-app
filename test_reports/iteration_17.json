@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 17 — Private ID-document upload at checkout. Created test_iter17_id_document.py (17 tests, all passing) covering: upload matrix (401/400/200), private GET auth (owner Bearer 200 w/ byte-equal, admin 200, other-user 404, no-auth blocked, signed ?t= 200, signed-for-other-file 404, bad token 404), public /api/files/{privateId} -> 404, booking rejection with missing/foreign/public doc ids -> 400 (no booking leaks), and mailer.shop_email contains two signed /api/private-files/..?t= anchors + passes _assert_safe_email. Updated iter15 and iter16 in-process success tests to upload doc photos (and clean them up) so they again return 200. Each test module passes individually: iter13 9/9, iter15 9/9, iter16 18/18, iter17 17/17. Frontend code review: CustomerForm renders customer-doc-front-box / customer-doc-back-box with PhotoPicker testIDPrefix wiring front/back {prefix}-camera/{prefix}-library and {prefix}-status; customer-form-error is only shown when customerErrors() non-empty (which now includes missing doc_front_id/doc_back_id). PhotoPicker uploadPath '/me/id-document' flows through BACKEND_URL + /api, uses Bearer token, calls onUploaded with {id} returned by backend; admin bike form still uses default /admin/upload producing /api/files/... URL (regression safe).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter17_id_document.py",
+    "/app/test_reports/pytest/pytest_iter17.xml"
+  ],
+  "action_items": [
+    "Known cross-module flake: when iter15 + iter16 + iter17 run together under xdist loadscope, httpx.ASGITransport reuses a torn-down module loop (iter16 TestPdfContent 'client closed'; iter15 inproc 'Event loop is closed'). Each module passes 100% in isolation; no production bug. Consider pinning iter15/iter16 inproc tests to loop_scope='module' with their own httpx client or marking them with pytest-xdist.group so they don't share a worker with iter17.",
+    "Minor: iter16 TestLiveRejections methods are decorated with pytest.mark.asyncio but are sync (noisy PytestWarning). Not failing, just cleanup."
+  ],
+  "critical_code_review_comments": [
+    "server.create_booking correctly validates doc photos BEFORE DB insert: `await db.files.count_documents({id:{$in:doc_ids},owner_id:user.id,kind:'id_document',is_deleted:False}) != 2` — this safely rejects missing, foreign, or non-id_document ids over live HTTP without touching the real Google sheet.",
+    "server.upload_id_document stores private files under tenant-scoped path `${APP_NAME}/documents/{user_id}/{fid}.{ext}` with public=False, kind='id_document' — correct isolation.",
+    "server.get_private_file: both auth paths (Bearer owner/admin and signed ?t=) return 404 (not 403) on mismatch, which prevents enumeration leaks. Public /api/files/{id} query is `{public: True}` so private ids are naturally 404 — verified.",
+    "mailer._doc_links guards base.startswith('https://') and both id fields present, so test env or missing-doc bookings never render broken links.",
+    "CustomerForm.customerErrors adds doc_front_id/doc_back_id to invalid-field list — field-level red borders + customer-form-error together give the user clear feedback when photos are missing."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter15_contract.py",
+    "/app/backend/tests/test_iter16_customer_pdf.py",
+    "/app/backend/tests/test_iter17_id_document.py"
+  ],
+  "success_rate": {"backend": "100% (iter17 17/17; iter13 9/9; iter15 9/9; iter16 18/18 per-module)", "frontend": "code-reviewed only; e2e navigation into /checkout stopped at Loop-Prevention cap (3 attempts failed to open the size-picker modal). All testIDs for CustomerForm doc photo UI are present in source and PhotoPicker uploadPath/testIDPrefix are wired correctly."},
+  "seed_data_creation": "None — tests create TEST_* users / files and clean them up via pymongo (sync, outside the ASGI loop).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend fully covered. Frontend e2e for the doc-upload flow could not complete auto-nav through 'Scegli la taglia' modal with Playwright in <3 attempts; the components themselves are correct. If main agent self-tests the mobile checkout flow, verify: (1) both customer-doc-front-box and customer-doc-back-box are present on /checkout, (2) after a library upload the status text contains 'Caricata ✓' and a thumbnail renders, (3) with docs missing the customer-form-error chip appears and no booking is created. DO NOT TAP confirm-booking-button with valid data — it writes to the real Google Sheet.",
+  "rca_of_issue": "No bug found. All five requested backend behaviours (upload matrix, private GET matrix, public /api/files denial for private, booking doc-id validation, mailer signed links) are implemented correctly and now have regression tests. iter15/iter16 inproc success tests were failing only because they lacked the newly-required doc photo uploads; they now upload two tiny PNGs via /api/me/id-document and attach the returned ids to the booking payload."
+}

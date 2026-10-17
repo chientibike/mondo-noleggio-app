@@ -43,7 +43,8 @@ export class ApiError extends Error {
 
 export async function api<T = any>(path: string, opts: { method?: string; body?: any } = {}): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json", "Accept-Language": getLang() };
-  if (memToken) headers.Authorization = `Bearer ${memToken}`;
+  const sentToken = memToken;
+  if (sentToken) headers.Authorization = `Bearer ${sentToken}`;
   const res = await fetch(`${BACKEND_URL}/api${path}`, {
     method: opts.method ?? "GET",
     headers,
@@ -52,7 +53,8 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) {
-    if (res.status === 401 && memToken) onUnauthorized?.();
+    // Only a rejected token logs out: a request sent before the saved token was loaded must not.
+    if (res.status === 401 && sentToken && sentToken === memToken) onUnauthorized?.();
     let msg = tr("generic_error");
     if (data?.detail) msg = typeof data.detail === "string" ? data.detail : tr("invalid_data");
     throw new ApiError(res.status, msg);

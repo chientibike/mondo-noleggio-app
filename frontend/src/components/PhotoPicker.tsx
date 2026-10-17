@@ -43,28 +43,39 @@ async function ensurePermission(source: Source, t: ReturnType<typeof useI18n>["t
   return false;
 }
 
-export function PhotoPicker({ onUploaded, disabled }: { onUploaded: (url: string) => void; disabled?: boolean }) {
+type Props = {
+  onUploaded: (data: any, localUri: string) => void;
+  disabled?: boolean;
+  uploadPath?: string; // backend route under /api
+  testIDPrefix?: string;
+  aspect?: [number, number];
+  successKey?: "photo_uploaded" | "doc_uploaded";
+};
+
+export function PhotoPicker({
+  onUploaded, disabled, uploadPath = "/admin/upload", testIDPrefix = "bike-form-photo", aspect = [3, 2], successKey = "photo_uploaded",
+}: Props) {
   const { t } = useI18n();
   const toast = useToast();
   const [busy, setBusy] = useState<Source | null>(null);
 
   const pick = async (source: Source) => {
     if (!(await ensurePermission(source, t))) return;
-    const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.7, allowsEditing: true, aspect: [3, 2] };
+    const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.7, allowsEditing: true, aspect };
     const result = source === "camera" ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
     setBusy(source);
     try {
-      const res = await uploadForm(`${BACKEND_URL}/api/admin/upload`, {
+      const res = await uploadForm(`${BACKEND_URL}/api${uploadPath}`, {
         headers: { Authorization: `Bearer ${getToken()}` },
         files: { file: { uri: asset.uri, name: asset.fileName ?? "bike.jpg", mimeType: asset.mimeType ?? "image/jpeg" } },
       });
       const text = await res.text();
       const data = text ? JSON.parse(text) : null;
       if (!res.ok) throw new Error(typeof data?.detail === "string" ? data.detail : t("upload_failed"));
-      onUploaded(data.url);
-      toast(t("photo_uploaded"), "success");
+      onUploaded(data, asset.uri);
+      toast(t(successKey), "success");
     } catch (e: any) {
       toast(e.message || t("upload_failed"), "error");
     } finally {
@@ -75,11 +86,11 @@ export function PhotoPicker({ onUploaded, disabled }: { onUploaded: (url: string
   return (
     <View style={{ flexDirection: "row", gap: 8 }}>
       <View style={{ flex: 1 }}>
-        <Button testID="bike-form-photo-camera" title={t("take_photo")} icon="camera" variant="secondary"
+        <Button testID={`${testIDPrefix}-camera`} title={t("take_photo")} icon="camera" variant="secondary"
           loading={busy === "camera"} disabled={disabled || !!busy} onPress={() => pick("camera")} />
       </View>
       <View style={{ flex: 1 }}>
-        <Button testID="bike-form-photo-library" title={t("from_gallery")} icon="images" variant="secondary"
+        <Button testID={`${testIDPrefix}-library`} title={t("from_gallery")} icon="images" variant="secondary"
           loading={busy === "library"} disabled={disabled || !!busy} onPress={() => pick("library")} />
       </View>
     </View>

@@ -157,6 +157,26 @@ async def test_in_process_success_store_booking(monkeypatch):
         # 3) get real contract version
         version = (await c.get("/api/contract")).json()["version"]
 
+        # 3b) upload the two mandatory ID document photos
+        from .test_iter13_upload import _tiny_png
+        png = _tiny_png()
+        doc_ids = []
+        for side in ("front", "back"):
+            r = await c.post("/api/me/id-document",
+                             files={"file": (f"{side}.png", png, "image/png")},
+                             headers=auth)
+            assert r.status_code == 200, r.text
+            doc_ids.append(r.json()["id"])
+
+        customer = {
+            "full_name": "Mario Rossi", "tax_code": "RSSMRA80A01L191X",
+            "birth_date": "1980-01-01", "address": "Via Roma 10",
+            "city_zip": "Tolentino 62029", "nationality": "Italiana",
+            "doc_type": "ci", "doc_number": "AX1234567",
+            "doc_issuer_expiry": "Comune, 31/12/2030", "emergency_contact": "",
+            "doc_front_id": doc_ids[0], "doc_back_id": doc_ids[1],
+        }
+
         # 4) book
         from datetime import date, timedelta
         payload = {
@@ -171,6 +191,7 @@ async def test_in_process_success_store_booking(monkeypatch):
             "clauses_approved": True,
             "privacy_accepted": True,
             "contract_version": version,
+            "customer": customer,
         }
         r = await c.post("/api/bookings", json=payload, headers=auth)
         assert r.status_code == 200, r.text
@@ -185,10 +206,11 @@ async def test_in_process_success_store_booking(monkeypatch):
     await asyncio.sleep(0.1)
     assert noop_called["n"] == 1, "on_booking_confirmed monkeypatch was NOT invoked"
 
-    # 6) cleanup: delete the booking doc + the test user directly from Mongo
+    # Teardown: delete booking doc + the test user + uploaded docs directly from Mongo
     res = await server.db.bookings.delete_one({"id": booking_id})
     assert res.deleted_count == 1
     await server.db.users.delete_one({"email": email})
+    await server.db.files.delete_many({"id": {"$in": doc_ids}})
 
     # 7) verify DB truly clean
     assert await server.db.bookings.find_one({"id": booking_id}) is None

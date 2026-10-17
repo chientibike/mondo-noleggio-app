@@ -155,7 +155,21 @@ async def inproc_setup(monkeymodule):
     bikes = (await client.get("/api/bikes")).json()
     bike_id = bikes[0]["id"]
     contract = (await client.get("/api/contract")).json()
+
+    # upload the two mandatory ID document photos for this user
+    from .test_iter13_upload import _tiny_png
+    png = _tiny_png()
+    doc_ids = []
+    for side in ("front", "back"):
+        r = await client.post("/api/me/id-document",
+                              files={"file": (f"{side}.png", png, "image/png")},
+                              headers={"Authorization": f"Bearer {token}"})
+        assert r.status_code == 200, r.text
+        doc_ids.append(r.json()["id"])
+
     cust = _good_customer()
+    cust["doc_front_id"] = doc_ids[0]
+    cust["doc_back_id"] = doc_ids[1]
     body = {
         "bike_id": bike_id, "size": "M", "date": _future_date(), "days": 2,
         "payment_method": "store", "phone": "3331234567",
@@ -171,9 +185,10 @@ async def inproc_setup(monkeymodule):
         "booking": booking, "customer": cust, "hook_calls": hook_calls,
     }
 
-    # Teardown: delete booking + user directly from Mongo
+    # Teardown: delete booking + user + uploaded docs directly from Mongo
     await server.db.bookings.delete_one({"id": booking["id"]})
     await server.db.users.delete_one({"id": user_id})
+    await server.db.files.delete_many({"id": {"$in": doc_ids}})
     await client.aclose()
 
 

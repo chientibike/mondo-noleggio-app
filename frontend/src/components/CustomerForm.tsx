@@ -1,4 +1,9 @@
+import { useState } from "react";
 import { Text, TextInput, View } from "react-native";
+import { Image } from "expo-image";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
+
+import { PhotoPicker } from "@/src/components/PhotoPicker";
 
 import { Chip } from "@/src/components/ui";
 import { useI18n } from "@/src/i18n";
@@ -15,11 +20,14 @@ export type Customer = {
   doc_number: string;
   doc_issuer_expiry: string;
   emergency_contact: string;
+  doc_front_id: string;
+  doc_back_id: string;
 };
 
 export const EMPTY_CUSTOMER: Customer = {
   full_name: "", tax_code: "", birth_date: "", address: "", city_zip: "", nationality: "Italiana",
   doc_type: "", doc_number: "", doc_issuer_expiry: "", emergency_contact: "",
+  doc_front_id: "", doc_back_id: "",
 };
 
 /** "31/12/1980" -> "1980-12-31" (or "" if not a real date) */
@@ -49,6 +57,8 @@ export function customerErrors(c: Customer): (keyof Customer)[] {
   if (!c.doc_type) bad.push("doc_type");
   if (c.doc_number.trim().length < 4) bad.push("doc_number");
   if (c.doc_issuer_expiry.trim().length < 3) bad.push("doc_issuer_expiry");
+  if (!c.doc_front_id) bad.push("doc_front_id");
+  if (!c.doc_back_id) bad.push("doc_back_id");
   return bad;
 }
 
@@ -75,7 +85,7 @@ export function CustomerForm({ value, onChange, showErrors }: { value: Customer;
 
   const input = (f: { key: keyof Customer; ph?: string; caps?: any; kb?: any }) => (
     <View key={f.key} style={{ gap: 4 }}>
-      <Text style={styles.label}>{t(`cust_${f.key}`)}</Text>
+      <Text style={styles.label}>{t(`cust_${f.key}` as "cust_full_name")}</Text>
       <TextInput
         testID={`customer-${f.key}`}
         style={[styles.input, bad.includes(f.key) && styles.inputBad]}
@@ -100,12 +110,54 @@ export function CustomerForm({ value, onChange, showErrors }: { value: Customer;
         ))}
       </View>
       {DOC_FIELDS.map(input)}
+      {(["doc_front_id", "doc_back_id"] as const).map((k) => (
+        <DocPhoto key={k} side={k} id={value[k]} bad={bad.includes(k)} onUploaded={(id) => set(k, id)} />
+      ))}
       {bad.length > 0 && <Text style={styles.err} testID="customer-form-error">{t("cust_invalid")}</Text>}
     </View>
   );
 }
 
+function DocPhoto({ side, id, bad, onUploaded }: { side: "doc_front_id" | "doc_back_id"; id: string; bad: boolean; onUploaded: (id: string) => void }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+  const { t } = useI18n();
+  const [preview, setPreview] = useState<string | null>(null);
+  const prefix = side === "doc_front_id" ? "customer-doc-front" : "customer-doc-back";
+  return (
+    <View style={[styles.docBox, bad && styles.chipsBad]} testID={`${prefix}-box`}>
+      <View style={styles.docHead}>
+        {preview ? (
+          <Image source={{ uri: preview }} style={styles.docThumb} contentFit="cover" />
+        ) : (
+          <View style={[styles.docThumb, styles.docEmpty]}>
+            <Ionicons name={id ? "checkmark-circle" : "card-outline"} size={26} color={id ? colors.brandPrimary : colors.muted} />
+          </View>
+        )}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.label}>{t(side === "doc_front_id" ? "doc_front" : "doc_back")}</Text>
+          <Text style={styles.hint} testID={`${prefix}-status`}>{id ? t("doc_photo_ok") : t("doc_photo_missing")}</Text>
+        </View>
+      </View>
+      <PhotoPicker
+        uploadPath="/me/id-document"
+        testIDPrefix={prefix}
+        aspect={[16, 10]}
+        successKey="doc_uploaded"
+        onUploaded={(d, uri) => {
+          setPreview(uri);
+          onUploaded(d.id);
+        }}
+      />
+    </View>
+  );
+}
+
 const useStyles = makeStyles((c) => ({
+  docBox: { gap: 8, borderRadius: 12, borderWidth: 1, borderColor: c.border, padding: 10 },
+  docHead: { flexDirection: "row", alignItems: "center", gap: 12 },
+  docThumb: { width: 72, height: 46, borderRadius: 8, backgroundColor: c.surfaceSecondary },
+  docEmpty: { alignItems: "center", justifyContent: "center" },
   box: { backgroundColor: c.surface, borderRadius: 16, padding: 16, gap: 10 },
   hint: { fontSize: 13, color: c.onSurfaceTertiary },
   label: { fontSize: 12, fontWeight: "700", color: c.onSurfaceSecondary },

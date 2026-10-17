@@ -217,13 +217,27 @@ def booking_email(bk: dict) -> tuple[str, str]:
     return _subject("Prenotazione confermata", bk), html
 
 
+def _doc_links(bk: dict) -> str:
+    """Signed links to the customer's ID document photos (shop email only)."""
+    c = bk.get("customer") or {}
+    base = bk.get("public_base") or ""
+    if not base.startswith("https://") or not (c.get("doc_front_id") and c.get("doc_back_id")):
+        return ""
+    from server import file_link_token
+    links = " · ".join(
+        f'<a href="{escape(base)}/api/private-files/{escape(c[k])}?t={file_link_token(c[k])}">{label}</a>'
+        for k, label in (("doc_front_id", "Documento fronte"), ("doc_back_id", "Documento retro")))
+    return f"<p><strong>Foto documento:</strong> {links}</p>"
+
+
 def shop_email(bk: dict) -> tuple[str, str]:
     html = _card("Nuova prenotazione dall'app 📥",
                  "È arrivata una nuova prenotazione confermata:",
                  _rows(bk, [("Cliente", bk["user_name"]), ("Email cliente", bk["user_email"]),
                             ("Telefono", bk.get("phone")), ("Unità assegnata", bk.get("unit_id")),
                             ("Contratto", "Accettato in app ✅ (PDF in allegato)" if bk.get("contract_accepted_at") else None),
-                            ("Codice fiscale", (bk.get("customer") or {}).get("tax_code"))]))
+                            ("Codice fiscale", (bk.get("customer") or {}).get("tax_code"))]),
+                 _doc_links(bk))
     return _subject("Nuova prenotazione", bk), html
 
 

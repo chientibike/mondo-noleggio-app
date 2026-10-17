@@ -160,6 +160,8 @@ class CustomerIn(BaseModel):
     doc_number: str = Field(min_length=4, max_length=30)
     doc_issuer_expiry: str = Field(min_length=3, max_length=100)
     emergency_contact: str = Field(default="", max_length=100)
+    doc_front_id: str = Field(default="", max_length=40)  # private photos of the ID document
+    doc_back_id: str = Field(default="", max_length=40)
 
 
 class BookingIn(BaseModel):
@@ -434,6 +436,10 @@ async def create_booking(body: BookingIn, request: Request, user: dict = Depends
         raise HTTPException(409, "Il contratto è stato aggiornato: rileggilo e accettalo di nuovo")
     if not body.customer:
         raise HTTPException(400, "Compila i dati per il contratto (codice fiscale e documento)")
+    doc_ids = [body.customer.doc_front_id, body.customer.doc_back_id]
+    if not all(doc_ids) or await db.files.count_documents(
+            {"id": {"$in": doc_ids}, "owner_id": user["id"], "kind": "id_document", "is_deleted": False}) != 2:
+        raise HTTPException(400, "Carica la foto del documento (fronte e retro)")
     b = await db.bikes.find_one({"id": body.bike_id}, {"_id": 0})
     if not b:
         raise HTTPException(404, "Bici non trovata")
@@ -732,6 +738,61 @@ async def admin_upload_photo(file: UploadFile = File(...), user: dict = Depends(
                                "size": len(data), "original_name": file.filename, "owner_id": user["id"],
                                "public": True, "is_deleted": False, "created_at": now_iso()})
     return {"url": f"/api/files/{fid}"}
+
+
+def file_link_token(file_id: str) -> str:
+    now = datetime.now(timezone.utc)
+    return jwt.encode({"sub": file_id, "purpose": "file", "iat": now, "exp": now + timedelta(days=180)},
+                      JWT_SECRET, algorithm=JWT_ALG)
+
+
+@api.post("/me/id-document")
+async def upload_id_document(file: UploadFile = File(...), user: dict = Depends(current_user)):
+    """Private photo of the customer's ID document (front or back). Only the owner and admins can view it."""
+    ctype = (file.content_type or "").lower()
+    if ctype not in IMAGE_TYPES:
+        raise HTTPException(400, "Formato non supportato: usa una foto JPG, PNG, WEBP o HEIC")
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "File vuoto")
+    if len(data) > MAX_PHOTO_BYTES:
+        raise HTTPException(413, "Foto troppo grande (massimo 10 MB)")
+    fid = uuid.uuid4().hex
+    path = f"{storage.APP_NAME}/documents/{user['id']}/{fid}.{IMAGE_TYPES[ctype]}"
+    try:
+        res = await storage.put_object(path, data, ctype)
+    except Exception as e:
+        status = getattr(getattr(e, "response", None), "status_code", None)
+        logger.warning("ID document upload failed (%s): %s", status, e)
+        raise HTTPException(502, "Caricamento non riuscito, riprova")
+    await db.files.insert_one({"id": fid, "storage_path": res.get("path", path), "content_type": ctype,
+                               "size": len(data), "original_name": file.filename, "owner_id": user["id"],
+                               "kind": "id_document", "public": False, "is_deleted": False, "created_at": now_iso()})
+    return {"id": fid}
+
+
+@api.get("/private-files/{file_id}")
+async def get_private_file(file_id: str, request: Request, t: Optional[str] = None):
+    """ID document photos: owner or admin (Bearer), or a signed link from the shop email (?t=)."""
+    f = await db.files.find_one({"id": file_id, "public": False, "is_deleted": False}, {"_id": 0})
+    allowed = False
+    if t:
+        try:
+            p = jwt.decode(t, JWT_SECRET, algorithms=[JWT_ALG])
+            allowed = p.get("purpose") == "file" and p.get("sub") == file_id
+        except jwt.InvalidTokenError:
+            allowed = False
+    else:
+        user = await current_user(request)
+        allowed = bool(f) and (f["owner_id"] == user["id"] or user.get("role") == "admin")
+    if not allowed or not f:
+        raise HTTPException(404, "File non trovato")
+    try:
+        data, ctype = await storage.get_object(f["storage_path"])
+    except Exception as e:
+        logger.warning("Private file read failed for %s: %s", file_id, e)
+        raise HTTPException(502, "File non disponibile")
+    return Response(content=data, media_type=f.get("content_type") or ctype, headers={"Cache-Control": "private, no-store"})
 
 
 @api.get("/files/{file_id}")

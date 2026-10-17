@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="1" failures="1" skipped="0" tests="53" time="7.369" timestamp="2026-10-17T09:28:11.947437+00:00" hostname="agent-env-d23e969c-c180-4525-a37f-b721fd2de4aa"><testcase classname="tests.test_iter15_contract.TestBookingRejections" name="test_stripe_rejected" time="0.874" /><testcase classname="tests.test_iter15_contract.TestBookingRejections" name="test_store_without_contract_accepted" time="0.085" /><testcase classname="tests.test_iter15_contract.TestBookingRejections" name="test_store_without_clauses" time="0.116" /><testcase classname="tests.test_iter15_contract.TestBookingRejections" name="test_store_without_privacy" time="0.086" /><testcase classname="tests.test_iter15_contract.TestBookingRejections" name="test_store_bad_contract_version" time="0.104" /><testcase classname="tests.test_iter17_id_document.TestPrivateGet" name="test_owner_bearer_200_bytes_equal" time="1.326" /><testcase classname="tests.test_iter15_contract.TestBookingRejections" name="test_store_missing_contract_version" time="0.048" /><testcase classname="tests.test_iter15_contract.TestBookingRejections" name="test_no_booking_leaked_to_real_sheet" time="0.023" /><testcase classname="tests.test_iter17_id_document.TestPrivateGet" name="test_admin_bearer_200" time="0.524" /><testcase classname="tests.test_iter17_id_document.TestPrivateGet" name="test_other_user_404" time="0.301" /><testcase classname="tests.test_iter17_id_document.TestPrivateGet" name="test_no_auth_blocked" time="0.064" /><testcase classname="tests.test_iter17_id_document.TestPrivateGet" name="test_signed_token_200" time="0.522" /><testcase classname="tests.test_iter16_customer_pdf.TestPdfAuthz" name="test_owner_bearer_gets_pdf" time="1.207" /><testcase classname="tests.test_iter16_customer_pdf.TestPdfAuthz" name="test_admin_bearer_gets_pdf" time="0.213" /><testcase classname="tests.test_iter17_id_document.TestPrivateGet" name="test_signed_token_for_other_file_404" time="0.078" /><testcase classname="tests.test_iter16_customer_pdf.TestPdfAuthz" name="test_other_user_gets_404" time="0.201" /><testcase classname="tests.test_iter17_id_document.TestPrivateGet" name="test_bad_signed_token_404" time="0.087" /><testcase classname="tests.test_iter16_customer_pdf.TestLiveRejections" name="test_missing_customer_returns_400" time="0.145" /><testcase classname="tests.test_iter16_customer_pdf.TestPdfAuthz" name="test_contract_link_token_grants_access" time="0.015" /><testcase classname="tests.test_iter16_customer_pdf.TestPdfAuthz" name="test_bad_link_token_returns_404" time="0.002" /><testcase classname="tests.test_iter16_customer_pdf.TestPdfAuthz" name="test_other_booking_token_returns_404" time="0.002" /><testcase classname="tests.test_iter16_customer_pdf.TestPdfAuthz" name="test_contract_token_rejected_as_bearer" time="0.003" /><testcase classname="tests.test_iter17_id_document.TestBookingDocRequirement" name="test_missing_doc_ids_400" time="0.065" /><testcase classname="tests.test_iter16_customer_pdf.TestLiveRejections" name="test_invalid_customer_tax_code_returns_422" time="0.294" /><testcase classname="tests.test_iter16_customer_pdf.TestLiveRejections" name="test_invalid_customer_doc_type_returns_422" time="0.161" /><testcase classname="tests.test_iter16_customer_pdf.TestLiveRejections" name="test_invalid_birth_date_returns_422" time="0.115" /><testcase classname="tests.test_iter17_id_document.TestBookingDocRequirement" name="test_doc_ids_from_other_user_400" time="0.959" /><testcase classname="tests.test_iter16_customer_pdf.TestLiveRejections" name="test_no_booking_created_after_rejections" time="0.025" /><testcase classname="tests.test_iter17_id_document.TestUploadMatrix" name="test_no_token_401" time="0.040" /><testcase classname="tests.test_iter17_id_document.TestUploadMatrix" name="test_text_plain_400" time="0.072" /><testcase classname="tests.test_iter17_id_document.TestUploadMatrix" name="test_image_200" time="0.519" /><testcase classname="tests.test_iter17_id_document.TestBookingDocRequirement" name="test_doc_ids_are_bike_photos_400" time="0.759" /><testcase classname="tests.test_iter17_id_document.TestBookingDocRequirement" name="test_no_booking_created" time="0.026" /><testcase classname="tests.test_iter13_upload.TestAdminUploadRoundTrip" name="test_upload_png_200" time="0.237" /><testcase classname="tests.test_iter13_upload.TestAdminUploadRoundTrip" name="test_get_file_200_same_bytes" time="0.163" /><testcase classname="tests.test_iter16_customer_pdf.TestMailer" name="test_booking_email_includes_pdf_link_and_date" time="0.815" /><testcase classname="tests.test_iter16_customer_pdf.TestMailer" name="test_contract_attachment_returns_pdf" time="0.016" /><testcase classname="tests.test_iter16_customer_pdf.TestMailer" name="test_send_once_passes_attachments" time="0.016" /><testcase classname="tests.test_iter16_customer_pdf.TestInProcSuccess" name="test_booking_persists_customer_and_accepted_at" time="0.001" /><testcase classname="tests.test_iter16_customer_pdf.TestInProcSuccess" name="test_me_customer_returns_saved" time="0.004" /><testcase classname="tests.test_iter13_upload.TestAdminUploadAuth" name="test_no_token_401" time="0.030" /><testcase classname="tests.test_iter13_upload.TestAdminUploadAuth" name="test_normal_user_403" time="0.037" /><testcase classname="tests.test_iter13_upload.TestAdminUploadRoundTrip" name="test_upload_jpeg_200" time="0.348" /><testcase classname="tests.test_iter13_upload.TestAdminUploadContent" name="test_text_plain_400" time="0.028" /><testcase classname="tests.test_iter13_upload.TestAdminUploadContent" name="test_too_large_413" time="0.152" /><testcase classname="tests.test_iter17_id_document.TestMailerDocLinks" name="test_shop_email_contains_two_signed_links" time="0.001" /><testcase classname="tests.test_iter17_id_document.TestMailerDocLinks" name="test_shop_email_without_docs_has_no_links" time="0.001" /><testcase classname="tests.test_iter17_id_document.TestPublicFilesDoesNotServePrivate" name="test_public_endpoint_404_for_private" time="0.396" /><testcase classname="tests.test_iter15_contract.TestContractEndpoint" name="test_contract_shape" time="0.048" /><testcase classname="tests.test_iter16_customer_pdf.TestPdfContent" name="test_pdf_text_contains_customer_and_acceptance" time="0.002"><error message="failed on setup with &quot;RuntimeError: Event loop is closed&quot;">tests/test_iter16_customer_pdf.py:150: in inproc_setup
+    r = await client.post("/api/auth/register", json={"email": email, "password": "testpass123", "name": "Mario Rossi"})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+/root/.venv/lib/python3.11/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+/root/.venv/lib/python3.11/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+/root/.venv/lib/python3.11/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/httpx/_transports/asgi.py:170: in handle_async_request
+    await self.app(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/fastapi/applications.py:1054: in __call__
+    await super().__call__(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/starlette/applications.py:123: in __call__
+    await self.middleware_stack(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+/root/.venv/lib/python3.11/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+/root/.venv/lib/python3.11/site-packages/starlette/middleware/cors.py:85: in __call__
+    await self.app(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/starlette/middleware/exceptions.py:65: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py:64: in wrapped_app
+    raise exc
+/root/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    await app(scope, receive, sender)
+/root/.venv/lib/python3.11/site-packages/starlette/routing.py:756: in __call__
+    await self.middleware_stack(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/starlette/routing.py:776: in app
+    await route.handle(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/starlette/routing.py:297: in handle
+    await self.app(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/starlette/routing.py:77: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py:64: in wrapped_app
+    raise exc
+/root/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    await app(scope, receive, sender)
+/root/.venv/lib/python3.11/site-packages/starlette/routing.py:72: in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/fastapi/routing.py:278: in app
+    raw_response = await run_endpoint_function(
+/root/.venv/lib/python3.11/site-packages/fastapi/routing.py:191: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+server.py:252: in register
+    if await db.users.find_one({"email": email}):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/motor/metaprogramming.py:75: in method
+    return framework.run_on_executor(
+/root/.venv/lib/python3.11/site-packages/motor/frameworks/asyncio/__init__.py:85: in run_on_executor
+    return loop.run_in_executor(_EXECUTOR, functools.partial(fn, *args, **kwargs))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:817: in run_in_executor
+    self._check_closed()
+/usr/local/lib/python3.11/asyncio/base_events.py:520: in _check_closed
+    raise RuntimeError('Event loop is closed')
+E   RuntimeError: Event loop is closed</error></testcase><testcase classname="tests.test_iter13_upload.TestGetFileNotFound" name="test_unknown_id_404" time="0.029" /><testcase classname="tests.test_iter13_upload.TestAdminBikeWithUploadedPhoto" name="test_create_and_delete_bike_with_uploaded_photo" time="0.661" /><testcase classname="tests.test_iter15_contract" name="test_in_process_success_store_booking" time="0.065"><failure message="RuntimeError: Event loop is closed">tests/test_iter15_contract.py:147: in test_in_process_success_store_booking
+    r = await c.post("/api/auth/register",
+/root/.venv/lib/python3.11/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+/root/.venv/lib/python3.11/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+/root/.venv/lib/python3.11/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+/root/.venv/lib/python3.11/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/httpx/_transports/asgi.py:170: in handle_async_request
+    await self.app(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/fastapi/applications.py:1054: in __call__
+    await super().__call__(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/starlette/applications.py:123: in __call__
+    await self.middleware_stack(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+/root/.venv/lib/python3.11/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+/root/.venv/lib/python3.11/site-packages/starlette/middleware/cors.py:85: in __call__
+    await self.app(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/starlette/middleware/exceptions.py:65: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py:64: in wrapped_app
+    raise exc
+/root/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    await app(scope, receive, sender)
+/root/.venv/lib/python3.11/site-packages/starlette/routing.py:756: in __call__
+    await self.middleware_stack(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/starlette/routing.py:776: in app
+    await route.handle(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/starlette/routing.py:297: in handle
+    await self.app(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/starlette/routing.py:77: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+/root/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py:64: in wrapped_app
+    raise exc
+/root/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    await app(scope, receive, sender)
+/root/.venv/lib/python3.11/site-packages/starlette/routing.py:72: in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/fastapi/routing.py:278: in app
+    raw_response = await run_endpoint_function(
+/root/.venv/lib/python3.11/site-packages/fastapi/routing.py:191: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+server.py:252: in register
+    if await db.users.find_one({"email": email}):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/motor/metaprogramming.py:75: in method
+    return framework.run_on_executor(
+/root/.venv/lib/python3.11/site-packages/motor/frameworks/asyncio/__init__.py:85: in run_on_executor
+    return loop.run_in_executor(_EXECUTOR, functools.partial(fn, *args, **kwargs))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:817: in run_in_executor
+    self._check_closed()
+/usr/local/lib/python3.11/asyncio/base_events.py:520: in _check_closed
+    raise RuntimeError('Event loop is closed')
+E   RuntimeError: Event loop is closed</failure></testcase></testsuite></testsuites>
