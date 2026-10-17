@@ -179,7 +179,8 @@ def booking_email(bk: dict) -> tuple[str, str]:
     html = _card("Prenotazione confermata 🚲",
                  f'Ciao {escape(bk["user_name"])}, grazie per aver prenotato con {brand}! Ecco il riepilogo:',
                  _rows(bk),
-                 "<p>Porta con te un documento d'identità al momento del ritiro.</p>" + _contact())
+                 "<p>Hai accettato il contratto di noleggio in app. Porta con te un documento d'identità al momento del ritiro.</p>"
+                 + _contact())
     return _subject("Prenotazione confermata", bk), html
 
 
@@ -187,7 +188,8 @@ def shop_email(bk: dict) -> tuple[str, str]:
     html = _card("Nuova prenotazione dall'app 📥",
                  "È arrivata una nuova prenotazione confermata:",
                  _rows(bk, [("Cliente", bk["user_name"]), ("Email cliente", bk["user_email"]),
-                            ("Telefono", bk.get("phone")), ("Unità assegnata", bk.get("unit_id"))]))
+                            ("Telefono", bk.get("phone")), ("Unità assegnata", bk.get("unit_id")),
+                            ("Contratto", "Accettato in app ✅" if bk.get("contract_accepted_at") else None)]))
     return _subject("Nuova prenotazione", bk), html
 
 

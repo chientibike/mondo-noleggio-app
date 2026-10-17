@@ -10,6 +10,7 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 
 import { api, imageUri, type Bike, type Booking, type Quote } from "@/src/api";
 import { Button } from "@/src/components/ui";
+import { ContractModal, useContract } from "@/src/components/ContractModal";
 import { SIZE_HEIGHTS, euro, fmtRange, fmtUnits } from "@/src/format";
 import { useI18n } from "@/src/i18n";
 import { startStripePayment } from "@/src/payments";
@@ -27,7 +28,11 @@ export default function Checkout() {
   const toast = useToast();
   const qc = useQueryClient();
   const { t } = useI18n();
-  const [method, setMethod] = useState<Method>("stripe");
+  const [method, setMethod] = useState<Method>("store");
+  const contractQ = useContract();
+  const [contractOpen, setContractOpen] = useState(false);
+  const [acceptedVersion, setAcceptedVersion] = useState<string | null>(null);
+  const contractOk = !!acceptedVersion && acceptedVersion === contractQ.data?.version;
   const [busy, setBusy] = useState(false);
   const { user } = useAuth();
   const [phone, setPhone] = useState(user?.phone ?? "");
@@ -50,7 +55,10 @@ export default function Checkout() {
   const confirm = async () => {
     setBusy(true);
     try {
-      const booking = await api<Booking>("/bookings", { method: "POST", body: { ...body, payment_method: method, phone: phone.trim() } });
+      const booking = await api<Booking>("/bookings", { method: "POST", body: {
+        ...body, payment_method: method, phone: phone.trim(),
+        contract_accepted: true, clauses_approved: true, privacy_accepted: true, contract_version: acceptedVersion,
+      } });
       qc.invalidateQueries({ queryKey: ["my-bookings"] });
       qc.invalidateQueries({ queryKey: ["quote"] });
       if (method === "store") {
@@ -60,6 +68,10 @@ export default function Checkout() {
       const sid = await startStripePayment(booking.id);
       if (sid) router.replace({ pathname: "/payment-result", params: { session_id: sid, booking_id: booking.id } });
     } catch (e: any) {
+      if (e.status === 409 && /contratto/i.test(e.message)) {
+        setAcceptedVersion(null);
+        contractQ.refetch();
+      }
       toast(e.message, "error");
     } finally {
       setBusy(false);
@@ -70,8 +82,8 @@ export default function Checkout() {
   const quote = quoteQ.data;
 
   const methods: { key: Method | "paypal"; title: string; sub: string; icon: any; disabled?: boolean }[] = [
-    { key: "stripe", title: t("pay_card"), sub: t("pay_card_sub"), icon: "card-outline" },
     { key: "store", title: t("pay_store"), sub: t("pay_store_sub"), icon: "storefront-outline" },
+    { key: "stripe", title: t("pay_card"), sub: t("coming_soon"), icon: "card-outline", disabled: true },
     { key: "paypal", title: "PayPal", sub: t("coming_soon"), icon: "logo-paypal", disabled: true },
   ];
 
@@ -146,18 +158,41 @@ export default function Checkout() {
               </Pressable>
             );
           })}
+          <Text style={styles.section}>{t("contract_title")}</Text>
+          <Pressable
+            testID="contract-open"
+            onPress={() => setContractOpen(true)}
+            style={[styles.method, contractOk && styles.methodOn]}
+          >
+            <Ionicons name={contractOk ? "checkmark-circle" : "document-text-outline"} size={24} color={contractOk ? colors.brandPrimary : colors.onSurfaceTertiary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.methodTitle}>{contractOk ? t("contract_accepted") : t("contract_read")}</Text>
+              <Text style={styles.meta}>{contractQ.isError ? (contractQ.error as Error).message : contractOk ? t("contract_reread") : t("contract_required")}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+          </Pressable>
         </KeyboardAwareScrollView>
       )}
 
       <View style={[styles.ctaBar, { paddingBottom: insets.bottom + 16 }]}>
         <Button
           testID="confirm-booking-button"
-          title={method === "stripe" ? t("confirm_and_pay") : t("confirm_booking")}
+          title={contractOk ? t("confirm_booking") : t("contract_read")}
           loading={busy}
-          disabled={!quote || !phoneOk || (quote.available?.[p.size as "S"] ?? 0) <= 0}
-          onPress={confirm}
+          disabled={!quote || !phoneOk || !contractQ.data || (quote.available?.[p.size as "S"] ?? 0) <= 0}
+          onPress={contractOk ? confirm : () => setContractOpen(true)}
         />
       </View>
+      <ContractModal
+        key={contractOpen ? "open" : "closed"}
+        visible={contractOpen}
+        contract={contractQ.data}
+        onClose={() => setContractOpen(false)}
+        onAccept={() => {
+          setAcceptedVersion(contractQ.data?.version ?? null);
+          setContractOpen(false);
+        }}
+      />
     </View>
   );
 }

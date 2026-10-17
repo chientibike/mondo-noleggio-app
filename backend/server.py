@@ -8,6 +8,7 @@ from sheet_writer import push_booking, script_url, ping as sheet_ping
 from mailer import on_booking_confirmed, reminder_loop
 from enricher import enrich_bike, enrich_new_bikes, lookup as web_lookup
 import storage
+from contract import get_contract
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -140,6 +141,8 @@ class Booking(BaseModel):
     sheet_id: Optional[str] = None
     unit_id: Optional[str] = None
     phone: Optional[str] = None
+    contract_version: Optional[str] = None
+    contract_accepted_at: Optional[str] = None
     created_at: str = Field(default_factory=now_iso)
 
 
@@ -151,6 +154,10 @@ class BookingIn(BaseModel):
     days: Optional[int] = None
     payment_method: Literal["stripe", "store"]
     phone: Optional[str] = Field(default=None, max_length=30)
+    contract_accepted: bool = False
+    clauses_approved: bool = False  # specific approval, artt. 1341-1342 c.c.
+    privacy_accepted: bool = False
+    contract_version: Optional[str] = Field(default=None, max_length=64)
 
 
 class CheckoutIn(BaseModel):
@@ -205,12 +212,22 @@ async def admin_user(user: dict = Depends(current_user)) -> dict:
     return user
 
 
+def is_owner_email(email: str) -> bool:
+    """Shop owner emails (OWNER_ADMIN_EMAILS, comma separated) become admin when they sign in with Google,
+    because Google has verified that the person really owns the address."""
+    owners = {e.strip().lower() for e in os.environ.get("OWNER_ADMIN_EMAILS", "").split(",") if e.strip()}
+    return email in owners
+
+
 # ---------------- Auth routes ----------------
 @api.post("/auth/register")
 async def register(body: RegisterIn):
     email = body.email.strip().lower()
     if "@" not in email:
         raise HTTPException(422, "Email non valida")
+    if is_owner_email(email):
+        # Password sign-up doesn't verify the address: the owner's email may only sign in with Google.
+        raise HTTPException(409, "Per questa email usa \"Continua con Google\"")
     if await db.users.find_one({"email": email}):
         raise HTTPException(409, "Email già registrata")
     user = {"id": new_id(), "email": email, "name": body.name.strip(), "role": "user",
@@ -238,13 +255,18 @@ async def google_session(body: SessionIn):
     data = r.json()
     email = data["email"].strip().lower()
     user = await db.users.find_one({"email": email}, {"_id": 0})
+    owner = is_owner_email(email)
     if user:
-        await db.users.update_one({"id": user["id"]}, {"$set": {"picture": data.get("picture"),
-                                                                 "name": user.get("name") or data.get("name")}})
+        upd = {"$set": {"picture": data.get("picture"), "name": user.get("name") or data.get("name")}}
+        if owner and user.get("role") != "admin":
+            # Promote the verified owner; drop any password set before (it was never verified).
+            upd["$set"]["role"] = "admin"
+            upd["$unset"] = {"password_hash": ""}
+        await db.users.update_one({"id": user["id"]}, upd)
         user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
     else:
         user = {"id": new_id(), "email": email, "name": data.get("name") or email.split("@")[0],
-                "picture": data.get("picture"), "role": "user", "created_at": now_iso()}
+                "picture": data.get("picture"), "role": "admin" if owner else "user", "created_at": now_iso()}
         await db.users.insert_one(user)
         user.pop("_id", None)
     return {"session_token": make_token(user["id"]), "user": to_public(user)}
@@ -332,8 +354,23 @@ async def quote(bike_id: str, body: BookingIn):
 
 
 # ---------------- Bookings ----------------
+@api.get("/contract")
+async def rental_contract():
+    """Rental contract from the "contratto noleggio" sheet tab; must be accepted to book."""
+    try:
+        return await get_contract(db)
+    except Exception:
+        raise HTTPException(503, "Contratto non disponibile al momento, riprova tra poco")
+
+
 @api.post("/bookings")
 async def create_booking(body: BookingIn, user: dict = Depends(current_user)):
+    if body.payment_method == "stripe" and os.environ.get("CARD_PAYMENTS_ENABLED", "false").lower() != "true":
+        raise HTTPException(400, "Il pagamento con carta sarà disponibile a breve: scegli il pagamento in negozio")
+    if not (body.contract_accepted and body.clauses_approved and body.privacy_accepted and body.contract_version):
+        raise HTTPException(400, "Per prenotare devi accettare il contratto di noleggio")
+    if not await db.contracts.find_one({"version": body.contract_version}, {"_id": 1}):
+        raise HTTPException(409, "Il contratto è stato aggiornato: rileggilo e accettalo di nuovo")
     b = await db.bikes.find_one({"id": body.bike_id}, {"_id": 0})
     if not b:
         raise HTTPException(404, "Bici non trovata")
@@ -350,6 +387,7 @@ async def create_booking(body: BookingIn, user: dict = Depends(current_user)):
         payment_status="pending" if body.payment_method == "stripe" else "to_pay_in_store",
         status="pending_payment" if body.payment_method == "stripe" else "confirmed",
         phone=(body.phone or "").strip() or user.get("phone"),
+        contract_version=body.contract_version, contract_accepted_at=now_iso(),
     )
     if body.phone and body.phone.strip():
         await db.users.update_one({"id": user["id"]}, {"$set": {"phone": body.phone.strip()}})
