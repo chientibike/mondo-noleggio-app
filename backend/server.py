@@ -6,6 +6,7 @@ import asyncio
 from sheet_sync import sync_from_sheet
 from sheet_writer import push_booking, script_url, ping as sheet_ping
 from mailer import on_booking_confirmed, reminder_loop
+from enricher import enrich_bike, enrich_new_bikes
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -544,10 +545,16 @@ async def admin_sheet_script_url(body: ScriptUrlIn, _: dict = Depends(admin_user
     return {"ok": True}
 
 
+_enrich_task: Optional[asyncio.Task] = None
+
+
 async def sheet_sync_loop():
+    global _enrich_task
     while True:
         try:
             await sync_from_sheet(db)
+            if not _enrich_task or _enrich_task.done():
+                _enrich_task = asyncio.create_task(enrich_new_bikes(db))
         except Exception as e:
             logger.warning("Sheet sync failed: %s", e)
             await db.meta.update_one({"_id": "sheet_sync"}, {"$set": {"error": str(e)}}, upsert=True)
@@ -586,6 +593,12 @@ async def admin_update_bike(bike_id: str, body: BikeIn, _: dict = Depends(admin_
     if not res:
         raise HTTPException(404, "Bici non trovata")
     return Bike(**res)
+
+
+@api.post("/admin/bikes/{bike_id}/enrich")
+async def admin_enrich_bike(bike_id: str, _: dict = Depends(admin_user)):
+    """Search the web again for photo/specs of a model; fills only empty fields."""
+    return await enrich_bike(db, bike_id, force=True)
 
 
 @api.delete("/admin/bikes/{bike_id}")

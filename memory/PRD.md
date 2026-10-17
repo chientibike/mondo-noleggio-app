@@ -56,3 +56,4 @@ App scaricabile da tutti per gestire la giacenza di bici a noleggio (gravel, e-b
 - 'Percorsi' tab (app/(tabs)/routes.tsx) with link to Strava profile https://www.strava.com/athletes/15242190 (user chose simple link, no API)
 - Instagram button 'Seguici su Instagram' (instagram.com/chientibike) in Percorsi tab
 - Removed size filter row from Home; Strava link changed to https://www.strava.com/athlete/routes (user request; private page, warned)
+- Auto-enrich new sheet models (backend/enricher.py): Gemini 2.5 flash + googleSearch (EMERGENT_LLM_KEY) fills empty description IT/EN, specs and photo (og:image of product pages, brand site preferred); runs after sheet sync once per model (enriched_at); POST /api/admin/bikes/{id}/enrich to retry (fills only empty fields)

@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 10: Enricher (Gemini 2.5 flash + googleSearch grounding, Emergent LLM key) tested end-to-end. Added /app/backend/tests/test_enricher_iter10.py with 7 tests, ALL PASSED in ~53s. Backend: (1) GET /api/bikes returns 'Focus Sam 6.9' (id 3be9a93d650142a4a08580c6deec6b01) with image_url=https://revolutionmtb.com.au/wp-content/uploads/2025/03/DSC04987-1024x682.jpg (verified reachable), bilingual description (IT 'La FOCUS SAM² 6.9 è una e-mountain bike da enduro aggressiva...' / EN 'The FOCUS SAM² 6.9 is an aggressive enduro e-mountain bike...'), and full specs dict (frame, motor=Bosch Performance Line CX 85NM, battery=Bosch PowerTube 600/800Wh, groupset=SRAM Eagle 90, brakes=TRP EVO Pro, suspension=Fox 38 Factory + Fox DHX Performance Coil, wheels=DT Swiss HF1900 mullet, weight=26/27 kg). (2) POST /api/admin/bikes/{id}/enrich auth: 401 with no token, 403 with regular user token, 200 with admin — returns {ok:true, photo:bool, updated:[...]} within ~45s. (3) Admin force-enrich called on Raymon Soreno Comp (gravel): name/image_url/description/description_en/price_day/category/every pre-existing specs field preserved byte-for-byte — never overwritten. (4) enrich_new_bikes(db) direct test: inserted a TEST_ bike in Mongo with sheet_model='Canyon Grizl CF SL 8', category='gravel', empty image/description, no enriched_at; enrich_new_bikes picked it up, filled description + description_en + specs (frame/groupset/brakes/wheels/weight), set enriched_at ISO timestamp, then test cleaned up (deleted). (5) Guard: a TEST_ doc with enriched_at='2020-01-01T00:00:00+00:00' and empty fields is NOT re-processed by enrich_new_bikes — enriched_at + description unchanged. Confirms the filter 'enriched_at: {$exists: false}' is honored. (6) Regression: /api/admin/sheet/status returns synced_at — sheet sync loop still working. Frontend (390x844 mobile viewport, Playwright on https://bici-disponibili.preview.emergentagent.com): Home catalog shows 4 cards; Focus Sam 6.9 bike-card-3be9a93d... present with image src=https://revolutionmtb.com.au/.../DSC04987-1024x682.jpg, label 'E-bike MTB', price '€ 60,00/giorno'. Tapping the card navigates to /bike/3be9a93d650142a4a08580c6deec6b01 which renders the IT description paragraph and the CARATTERISTICHE table with rows Telaio/Motore/Batteria/Autonomia etc. — all enriched content displayed correctly. SAFETY: no POST /api/bookings executed, no stripe booking marked paid, no admin PATCH touched the real Raymon fleet; only the admin enrich endpoint was called with force=True on Raymon Soreno Comp and all fields were verified identical pre/post. All test bikes inserted directly into Mongo and deleted on teardown.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_enricher_iter10.py",
+    "/app/test_reports/pytest/pytest_iter10.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "enricher.enrich_bike (enricher.py:92) sets enriched_at as the FIRST action after loading the bike. This is intentional (acts as a lock preventing concurrent enrich loops from double-processing), but if the Gemini call fails, enriched_at stays set and enrich_new_bikes will NOT retry on the next sheet-sync tick. The function writes enrich_error so an admin can POST /api/admin/bikes/{id}/enrich (force=True) to retry. Acceptable but the behaviour is non-obvious; consider logging a one-line summary.",
+    "enricher._find_photo (enricher.py:67-89) first probes each candidate direct image URL, then only sorts the fetched product pages by brand-preference. If a non-brand retailer URL yields a valid direct image before the brand site is even fetched, the non-brand image wins. For Focus Sam 6.9 the chosen image is from revolutionmtb.com.au (not focus-bikes.com). Image is correct and reachable, so this is fine for current scope, but 'brand site preferred' is only honored when direct `images` are empty.",
+    "enricher.PROMPT (enricher.py:25-35) asks for 'manufacturer official product page' but the current spec dict for Focus Sam 6.9 includes 'range': 'Not explicitly stated...' — the prompt says to leave the field empty when not stated. Model is slightly non-compliant but harmless; could be strengthened in the prompt wording.",
+    "enricher.enrich_new_bikes (enricher.py:135) query uses {\"$or\": [{\"image_url\": \"\"}, {\"image_url\": None}, {\"description\": \"\"}]}. If a sheet model already has an image_url but no description, it will be queued (correct). If a sheet model has description but no image_url, also queued (correct). Good coverage.",
+    "server.sheet_sync_loop (server.py:551) spawns a single asyncio Task for enrich_new_bikes and checks _enrich_task.done() before re-spawning. This correctly prevents overlapping LLM calls across 30s sheet-sync ticks. Clean."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_enricher_iter10.py (new)",
+    "/app/test_reports/pytest/pytest_iter10.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (home card + detail description + detail specs rendered correctly on 390x844)"},
+  "seed_data_creation": "Two TEST_ bikes were inserted directly into Mongo during tests (TEST_<uuid> + TEST_skip_<uuid>) and both were deleted in the teardown block. Verified post-run: no TEST_ bikes remain. No real bikes modified; the admin force-enrich on Raymon Soreno Comp was verified byte-identical pre/post.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All iteration-10 enricher features verified. Re-run with: `cd /app/backend && python -m pytest tests/test_enricher_iter10.py -v --junitxml=/app/test_reports/pytest/pytest_iter10.xml`. The enrich-new-bikes test takes ~45s because it waits on a live Gemini + googleSearch call (one or two attempts). The admin force-enrich test on the Raymon also takes ~30-45s. SAFETY contract: never POST /api/bookings with payment_method=store or mark a stripe booking paid — those write to the user's real Google Sheet via on_booking_confirmed→push_booking. The admin force-enrich endpoint is safe (never overwrites filled fields) and can be invoked repeatedly.",
+  "rca_of_issue": "N/A — no bugs found."
+}
