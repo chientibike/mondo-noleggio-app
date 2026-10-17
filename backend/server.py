@@ -6,7 +6,7 @@ import asyncio
 from sheet_sync import sync_from_sheet
 from sheet_writer import push_booking, script_url, ping as sheet_ping
 from mailer import on_booking_confirmed, reminder_loop
-from enricher import enrich_bike, enrich_new_bikes
+from enricher import enrich_bike, enrich_new_bikes, lookup as web_lookup
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -101,6 +101,7 @@ class Bike(BaseModel):
     specs: Dict[str, str] = Field(default_factory=dict)
     stock: Dict[str, int] = Field(default_factory=lambda: {s: 0 for s in SIZES})
     sheet_model: Optional[str] = None
+    model_year: Optional[str] = None
     created_at: str = Field(default_factory=now_iso)
 
 
@@ -113,6 +114,7 @@ class BikeIn(BaseModel):
     price_day: float = Field(gt=0)
     specs: Dict[str, str] = Field(default_factory=dict)
     stock: Dict[str, int]
+    model_year: Optional[str] = Field(default=None, pattern=r"^((19|20)\d{2})?$")
 
 
 class Booking(BaseModel):
@@ -587,12 +589,31 @@ async def admin_create_bike(body: BikeIn, _: dict = Depends(admin_user)):
 
 @api.put("/admin/bikes/{bike_id}", response_model=Bike)
 async def admin_update_bike(bike_id: str, body: BikeIn, _: dict = Depends(admin_user)):
-    upd = {**body.model_dump(), "stock": clean_stock(body.stock)}
+    upd = {**body.model_dump(exclude={"model_year"}), "stock": clean_stock(body.stock)}
+    if body.model_year is not None:
+        upd["model_year"] = body.model_year or None
     res = await db.bikes.find_one_and_update({"id": bike_id}, {"$set": upd}, projection={"_id": 0},
                                              return_document=True)
     if not res:
         raise HTTPException(404, "Bici non trovata")
     return Bike(**res)
+
+
+class LookupIn(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    category: Literal["gravel", "egravel", "ebike_mtb"]
+    year: Optional[str] = Field(default=None, pattern=r"^((19|20)\d{2})?$")
+    exclude_image: Optional[str] = None
+
+
+@api.post("/admin/bikes/lookup")
+async def admin_lookup_bike(body: LookupIn, _: dict = Depends(admin_user)):
+    """Search the web for photo, descriptions and specs of a model. Returns data to review; saves nothing."""
+    try:
+        return await web_lookup(body.name.strip(), body.category, body.year or None, exclude=body.exclude_image)
+    except Exception as e:
+        logger.warning("Lookup failed for %s: %s", body.name, e)
+        raise HTTPException(502, "Ricerca online non riuscita, riprova tra poco")
 
 
 @api.post("/admin/bikes/{bike_id}/enrich")

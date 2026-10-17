@@ -115,7 +115,13 @@ function BikeCard({ bike, index, onPress }: { bike: Bike; index: number; onPress
     <Animated.View entering={FadeInDown.delay(index * 60).springify()}>
       <Pressable testID={`bike-card-${bike.id}`} onPress={onPress} style={({ pressed }) => [styles.card, pressed && { transform: [{ scale: 0.985 }] }]}>
         <View style={styles.imgWrap}>
-          <Image source={{ uri: bike.image_url }} style={styles.img} contentFit="cover" transition={200} />
+          {bike.image_url ? (
+            <Image source={{ uri: bike.image_url }} style={styles.img} contentFit="cover" transition={200} />
+          ) : (
+            <View style={[styles.img, styles.noImg]} testID={`bike-card-noimg-${bike.id}`}>
+              <Ionicons name="bicycle" size={64} color={colors.muted} />
+            </View>
+          )}
           <LinearGradient colors={["transparent", "rgba(28,28,30,0.75)"]} style={styles.scrim} />
           <View style={styles.imgOverlay}>
             <Text style={styles.cardCat}>{CATEGORY_LABELS[bike.category]}</Text>
@@ -169,6 +175,7 @@ const useStyles = makeStyles((c) => ({
   },
   imgWrap: { height: 200, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: "hidden", backgroundColor: c.surfaceTertiary },
   img: { width: "100%", height: "100%" },
+  noImg: { alignItems: "center", justifyContent: "center", paddingBottom: 40, backgroundColor: c.surfaceTertiary },
   scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: 120 },
   imgOverlay: { position: "absolute", left: 16, right: 16, bottom: 14 },
   cardCat: { color: c.onSurfaceInverse, fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1, opacity: 0.9 },

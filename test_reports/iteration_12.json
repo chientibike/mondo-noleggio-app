@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 12: model_year on bikes + lookup-with-year + year-aware photo filter + bicycle placeholder on empty-image bikes — all green. BACKEND: added /app/backend/tests/test_iter12_model_year.py (14 tests, 14/14 PASSED in ~46s). (1) GET /api/bikes includes model_year: all 3 Raymon bikes (Soreno Comp, Norza Comp, Vamok Pro) report '2027'; Focus Sam 6.9 (id 3be9a93d650142a4a08580c6deec6b01) reports '2026'. (2) POST /api/admin/bikes/lookup year validation: no-token→401, user-token→403, year='abcd'→422. (3) Lookup Focus Sam 6.9 with year='2026' returns 200 with keys {year='2026', year_confirmed:bool, image_url, source_url, description, description_en, specs:dict}; if year_confirmed=False then specs=={} (verified on the branch); byte-identical bike doc before/after (DB NOT mutated). (4) Enricher unit tests: _other_year('…/2024/review','2026')→True; _other_year('…/sam-6-9','2026')→False; _other_year with target year present→False; _other_year with 'my25' shorthand→False (regex only matches 20YY). _find_photo with year='2026' rejects an image URL containing only '2025' served from a page whose URL/title/meta do not mention 2026 (httpx mocked). (5) PUT /api/admin/bikes/{id} on a TEST_IT12_bike (created+deleted inside the test): sending model_year='2027' persists it; omitting model_year from the body keeps the previously stored '2026' (admin_update_bike only sets model_year when body.model_year is not None). FRONTEND (390x844): logged in admin@noleggionuovo.it/Admin2026! via /login (testID login-submit-button), opened /admin/bike-form?id=<focus>; testID bike-form-year shows '2026'; testID bike-form-search-online labeled 'Cerca di nuovo online' present and tappable; tap→button text cleared+aria-disabled=true (loading state), lookup completed in ~60s, description field repopulated with new Gemini text ('La Focus SAM² 6.9 è una e-mountain bike da downhill di alta gamma…'); bike-form-year-warning NOT shown (Gemini returned year_confirmed=true for 2026); navigated away WITHOUT tapping bike-form-save, re-GET /api/bikes/{id} byte-identical to pre-click snapshot (safety contract honored, DB not modified). Home catalog: Focus Sam 6.9 card renders testID bike-card-noimg-3be9a93d650142a4a08580c6deec6b01 (bicycle icon placeholder) because image_url is empty; detail page /bike/{id} also renders the bicycle-icon placeholder (same testID reused since the <Image> component is shared) and shows specs correctly. SAFETY: no bikes saved on real fleet, no bookings created, TEST_IT12_bike + TEST_user_<uuid> cleaned up.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "bike-detail", "issues": ["Detail page placeholder reuses testID 'bike-card-noimg-{id}' rather than a distinct 'bike-detail-noimg-{id}'. Not a bug (same component is likely shared), but a dedicated testID on the detail screen would make test discovery clearer. Low priority."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter12_model_year.py",
+    "/app/test_reports/pytest/pytest_iter12.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.admin_update_bike (server.py:591) excludes 'model_year' from the generic $set and only sets it when body.model_year is not None → 'omitted → keep existing' semantics work. Verified. If an admin wants to CLEAR the model year, they must send '' which becomes None in Mongo (upd['model_year'] = body.model_year or None). Clean.",
+    "server.BikeIn.model_year (server.py:117) regex ^((19|20)\\d{2})?$ accepts empty string (keep behaviour) and 4-digit years in 19xx/20xx. '2026' and '2027' fine; 'abcd'→422 (verified).",
+    "enricher._other_year (enricher.py:54-57) uses negative lookaround regex (?<!\\d)(20[12]\\d)(?!\\d) so '2026' doesn't incorrectly match '12026'/'20260'. _find_photo (line 95) correctly rejects pages that mention only a different year (line 118: _other_year(page_url, year)) and images that mention only another year unless page is year-ok (line 126). Logic is correct.",
+    "sheet_sync.resolve_bikes (sheet_sync.py:170-174) sets model_year = the most-common 'Anno' value among the fleet units of the base model (max by count). This correctly handled Raymon→2027 and Focus→2026 in the live DB. If a shop lists a model with mixed years, the majority wins; minority units' real year is lost — acceptable per spec but worth noting.",
+    "frontend/bike-form.tsx:96 sends year=modelYear.trim()||null and exclude_image=imageUrl.trim()||null. Pydantic LookupIn.year is Optional[str] with pattern that also allows '' (empty capture group), so '' would be accepted; the frontend sends null for empty, which is cleaner. Fine.",
+    "frontend/bike-form.tsx:103 setYearWarning(!!r.year && !r.year_confirmed) — testID bike-form-year-warning appears only when a non-empty year was requested AND Gemini did not confirm it. For Focus Sam 6.9/2026 Gemini currently returns year_confirmed=true (verified live), so the warning does not render — expected. Spec compliant.",
+    "frontend/(tabs)/index.tsx:120-124 renders testID bike-card-noimg-{id} with Ionicons bicycle 64px over surfaceTertiary bg when image_url is empty. Verified live for Focus Sam 6.9. For the detail screen (/bike/[id]), the same component appears to be reused — if main agent wants an explicit testID 'bike-detail-noimg-{id}' they'd need to add one; not a blocker."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter12_model_year.py (new)",
+    "/app/test_reports/pytest/pytest_iter12.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% (admin lookup + year field + home/detail placeholder)"},
+  "seed_data_creation": "Temporary TEST_IT12_bike created and deleted inside TestPutModelYear fixture. Session-scoped TEST_user_<uuid> registered via conftest.user_token for the 403 test (no bookings created). Real Raymon fleet and Focus Sam 6.9 were only READ; byte-identical before/after snapshots verified in both backend tests and the admin UI flow.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Re-run with: `cd /app/backend && python -m pytest tests/test_iter12_model_year.py -v --junitxml=/app/test_reports/pytest/pytest_iter12.xml` (~45s; the live Focus Sam lookup takes 30-60s, Gemini + googleSearch grounding). SAFETY contract (unchanged since iter10): /api/admin/bikes/lookup saves nothing (safe to invoke repeatedly). Never POST /api/bookings with payment_method=store and never mark a stripe booking paid — those write to the user's real Google Sheet. Never tap bike-form-save in the admin UI against the 4 real bikes. For UI tests the login submit button testID is 'login-submit-button' (NOT 'login-submit'). Focus Sam 6.9 id: 3be9a93d650142a4a08580c6deec6b01.",
+  "rca_of_issue": "N/A — all specified behaviours work. Note: during the UI lookup a transient 502 on an unrelated fetch appeared in the browser console but did not affect the lookup result (description was filled correctly and the response completed with 200). Likely an unrelated background request (not blocking)."
+}

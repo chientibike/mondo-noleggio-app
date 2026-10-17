@@ -34,6 +34,7 @@ export default function BikeForm() {
   const [imageUrl, setImageUrl] = useState("");
   const [priceDay, setPriceDay] = useState(id ? "" : String(CATEGORY_PRICES.gravel));
   const [stock, setStock] = useState<Record<Size, number>>({ S: 0, M: 0, L: 0, XL: 0 });
+  const [modelYear, setModelYear] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,19 +50,20 @@ export default function BikeForm() {
     setImageUrl(b.image_url);
     setPriceDay(String(b.price_day));
     setStock(b.stock);
+    setModelYear(b.model_year ?? "");
   }, [existing.data]);
 
   const save = async () => {
     setError(null);
     const pd = parseFloat(priceDay.replace(",", "."));
-    if (!name.trim() || !(pd > 0)) {
+    if (!name.trim() || !(pd > 0) || (modelYear.trim() && !/^(19|20)\d{2}$/.test(modelYear.trim()))) {
       setError(t("invalid_form"));
       return;
     }
     setBusy(true);
     try {
       const cleanSpecs = Object.fromEntries(Object.entries(specs).filter(([, v]) => v.trim()).map(([k, v]) => [k, v.trim()]));
-      const body = { name: name.trim(), category, description, description_en: descriptionEn, image_url: imageUrl.trim(), price_day: pd, stock, specs: cleanSpecs };
+      const body = { name: name.trim(), category, description, description_en: descriptionEn, image_url: imageUrl.trim(), price_day: pd, stock, specs: cleanSpecs, model_year: modelYear.trim() };
       await api(id ? `/admin/bikes/${id}` : "/admin/bikes", { method: id ? "PUT" : "POST", body });
       qc.invalidateQueries({ queryKey: ["bikes"] });
       qc.invalidateQueries({ queryKey: ["bike", id] });
@@ -72,6 +74,39 @@ export default function BikeForm() {
       setError(e.message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const [searching, setSearching] = useState(false);
+  const [source, setSource] = useState("");
+  const [yearWarning, setYearWarning] = useState(false);
+  const searchOnline = async () => {
+    if (!name.trim()) {
+      setError(t("lookup_need_name"));
+      return;
+    }
+    setError(null);
+    setSearching(true);
+    try {
+      const r = await api<{
+        image_url: string; source_url: string; description: string; description_en: string;
+        specs: Record<string, string>; year: string; year_confirmed: boolean;
+      }>("/admin/bikes/lookup", {
+        method: "POST",
+        body: { name: name.trim(), category, year: modelYear.trim() || null, exclude_image: imageUrl.trim() || null },
+      });
+      if (r.image_url) setImageUrl(r.image_url);
+      if (r.description) setDescription(r.description);
+      if (r.description_en) setDescriptionEn(r.description_en);
+      setSpecs((p) => ({ ...p, ...r.specs }));
+      setSource(r.source_url);
+      setYearWarning(!!r.year && !r.year_confirmed);
+      if (r.year && !r.year_confirmed) toast(t("lookup_year_missing").replace("{y}", r.year), "info");
+      else toast(r.image_url ? t("lookup_done") : t("lookup_no_photo"), r.image_url ? "success" : "info");
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setSearching(false);
     }
   };
 
@@ -87,6 +122,35 @@ export default function BikeForm() {
       </View>
       <KeyboardAwareScrollView bottomOffset={100} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}>
         {!!imageUrl && <Image source={{ uri: imageUrl }} style={styles.preview} contentFit="cover" />}
+        <View style={styles.lookupBox}>
+          <Field label={t("model_year")}>
+            <TextInput
+              testID="bike-form-year"
+              style={styles.input}
+              value={modelYear}
+              onChangeText={setModelYear}
+              keyboardType="number-pad"
+              maxLength={4}
+              placeholder="2026"
+              placeholderTextColor={colors.muted}
+            />
+          </Field>
+          <Button
+            testID="bike-form-search-online"
+            title={searching ? t("lookup_searching") : t("lookup_button")}
+            icon="search"
+            variant="secondary"
+            loading={searching}
+            disabled={busy}
+            onPress={searchOnline}
+          />
+          <Text style={styles.sizeH}>{source ? `${t("lookup_source")}: ${source}` : t("lookup_hint")}</Text>
+          {yearWarning && (
+            <Text style={styles.error} testID="bike-form-year-warning">
+              {t("lookup_year_missing").replace("{y}", modelYear)}
+            </Text>
+          )}
+        </View>
         <Field label={t("name")}>
           <TextInput testID="bike-form-name" style={styles.input} value={name} onChangeText={setName} placeholder={t("name_ph")} placeholderTextColor={colors.muted} />
         </Field>
@@ -156,7 +220,7 @@ export default function BikeForm() {
         {error && <Text style={styles.error} testID="bike-form-error">{error}</Text>}
       </KeyboardAwareScrollView>
       <KeyboardStickyView offset={{ opened: insets.bottom }} style={[styles.ctaBar, { paddingBottom: insets.bottom + 16 }]}>
-        <Button testID="bike-form-save" title={id ? t("save_changes") : t("add_bike")} loading={busy} onPress={save} />
+        <Button testID="bike-form-save" title={id ? t("save_changes") : t("add_bike")} loading={busy} disabled={searching} onPress={save} />
       </KeyboardStickyView>
     </View>
   );
@@ -190,5 +254,6 @@ const useStyles = makeStyles((c) => ({
   stepBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.brandSecondary, alignItems: "center", justifyContent: "center" },
   stockN: { fontSize: 18, fontWeight: "800", color: c.onSurface, minWidth: 28, textAlign: "center" },
   error: { color: c.error, fontSize: 14, fontWeight: "600" },
+  lookupBox: { gap: 6 },
   ctaBar: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 24, paddingTop: 16, backgroundColor: c.surface, borderTopWidth: 0.5, borderTopColor: c.border },
 }));

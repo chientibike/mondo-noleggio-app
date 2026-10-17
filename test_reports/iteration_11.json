@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 11: POST /api/admin/bikes/lookup (Gemini 2.5 flash + googleSearch grounding) + 'Cerca di nuovo online' admin UI tested end-to-end. Backend: added /app/backend/tests/test_lookup_iter11.py (7 tests, ALL PASSED in ~50s). (1) Auth: no-token → 401, regular-user token → 403. (2) Validation: invalid category 'road' → 422, name='A' (len<2) → 422, missing category → 422. (3) Admin behavior on Focus Sam 6.9 (id 3be9a93d650142a4a08580c6deec6b01): snapshot bike via GET /api/bikes/{id}, call POST /api/admin/bikes/lookup with exclude_image=current, re-GET → bike doc BYTE-IDENTICAL (DB untouched, as required). Response shape {image_url, source_url, description, description_en, specs} all present and well-typed; returned image_url ≠ exclude_image. (4) Lookup for 'Canyon Grail CF SL 7' (gravel) also returned populated fields. Frontend (390x844 Playwright): logged in admin@noleggionuovo.it / Admin2026! via /login (filled 2 inputs + tapped Accedi submit), navigated to /admin/bike-form?id=<focus-sam-id>. Button testID 'bike-form-search-online' visible with text 'Cerca di nuovo online'. Tapped → loading state (button text cleared/loading indicator), Save button aria-disabled=true while searching. Lookup POST completed in ~15s with 200. After: description field updated with new Gemini text ('La Focus Sam² 6.9 è una robusta mountain bike elettrica…'), spec frame filled ('7005 hydroformed aluminium, 165 mm F.O.L.D. kinematics…'), hint shows 'Fonte: https://www.focus-bikes.com/int/sam2-6-9' (official manufacturer URL), toast 'Dati trovati: controllali e premi Salva' visible, image preview replaced (different photo from pre-lookup). Tapped close (bike-form-back) WITHOUT saving — re-GET /api/bikes/{id} byte-identical to pre-test snapshot (real bike NOT modified). TEST 2: /admin/bike-form (no id, title 'Nuova bici'), tapped search with empty name → error 'Inserisci prima il nome del modello' shown in bike-form-error. No bikes created, no bookings created, no PATCH on Raymon fleet. SAFETY contract honored.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_lookup_iter11.py",
+    "/app/test_reports/pytest/pytest_iter11.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.admin_lookup_bike (server.py:604) wraps any exception in 502 'Ricerca online non riuscita, riprova tra poco'. This correctly hides Pydantic 422 from being swallowed because FastAPI runs validation BEFORE the handler body — the try/except never catches ValidationError. Confirmed by the 422 tests passing. Clean.",
+    "enricher.lookup (enricher.py:92) honors `exclude` for both the direct-image candidates list (line 72) and the fetched-page meta tags (line 87). The 2nd `_research` attempt also forwards `exclude`. Good coverage: when exclude_image is passed, the returned image_url is guaranteed different (verified in test_admin_200_and_db_unchanged).",
+    "bike-form.tsx:88-91 passes `exclude_image: imageUrl.trim() || null` — the backend LookupIn.exclude_image is Optional[str], and Pydantic accepts null → None. On the first search for a new bike (imageUrl empty), null is sent, which correctly becomes no-exclusion. Clean.",
+    "bike-form.tsx:92-95 only replaces imageUrl / description / description_en when the backend returns a non-empty value, and MERGES specs on top of the existing ones (`{...p, ...r.specs}`). This is the right UX: if a field couldn't be found online, the admin's existing data is preserved. Note: an admin cannot blank a field via lookup, only overwrite — intentional.",
+    "bike-form.tsx:198 `disabled={searching}` on save button prevents double-submits during search (verified: aria-disabled=true while lookup in flight). Good.",
+    "bike-form.tsx:110 router.back() can fail with 'GO_BACK was not handled' when the form is deep-linked (as in Playwright tests). In the real user flow (Profilo → Area Admin → edit), there is always a parent screen, so this is fine. Dev-only warning, no runtime impact."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_lookup_iter11.py (new)",
+    "/app/test_reports/pytest/pytest_iter11.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (edit-with-lookup + new-form empty-name validation)"},
+  "seed_data_creation": "No seed data created. All backend tests used the live Focus Sam 6.9 (id 3be9a93d650142a4a08580c6deec6b01) and verified byte-identical pre/post. One ephemeral TEST_user_<uuid> was registered via the user_token fixture (session-scoped) for the 403 test and had no bookings to clean up. Frontend tests used admin credentials and strictly did not call Save or create any bookings.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Re-run with: `cd /app/backend && python -m pytest tests/test_lookup_iter11.py -v --junitxml=/app/test_reports/pytest/pytest_iter11.xml`. The two live-lookup tests each take 15-45s because they wait on real Gemini + Google Search grounding. SAFETY contract (unchanged from iter10): never POST /api/bookings with payment_method=store or mark a stripe booking paid — those write to the user's real Google Sheet. The /api/admin/bikes/lookup endpoint is safe (saves nothing); it can be invoked repeatedly for QA. Only the admin UI's Save (PUT /api/admin/bikes/{id}) persists changes, and this test deliberately avoided tapping it.",
+  "rca_of_issue": "N/A — no bugs found. Feature works as specified."
+}

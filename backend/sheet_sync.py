@@ -66,7 +66,8 @@ def parse_sheet(text: str):
         if re.match(r"^[A-Z]{2,3}-\d+$", uid) and m:
             base = re.sub(r"\s*\bTG\s*(XL|S|M|L)\b.*$", "", model, flags=re.I).strip()
             fleet[uid] = {"category": PREFIX_CATEGORY.get(uid[:2]), "size": m.group(1).upper(),
-                          "status": col(r, fc + 9), "model": model, "base": base}
+                          "status": col(r, fc + 9), "model": model, "base": base,
+                          "year": (re.search(r"\b(19|20)\d{2}\b", col(r, fc + 2)) or [""])[0]}
         rid = col(r, bc)
         bike_uid = _norm_id(col(r, bc + 1))
         start, end = _date(col(r, bc + 5)), _date(col(r, bc + 6))
@@ -128,7 +129,11 @@ async def resolve_bikes(db, fleet: dict, models: dict) -> dict:
     bikes = await db.bikes.find({}, {"_id": 0}).sort("created_at", 1).to_list(200)
     by_model = {b["sheet_model"].lower(): b for b in bikes if b.get("sheet_model")}
     bases = {}
+    years = {}  # base -> {year: unit count}
     for u in fleet.values():
+        if u.get("year"):
+            yc = years.setdefault(u["base"].lower(), {})
+            yc[u["year"]] = yc.get(u["year"], 0) + 1
         prev = bases.get(u["base"].lower())
         if not prev or (not prev[1] and u["category"]):
             bases[u["base"].lower()] = (u["base"], u["category"])
@@ -164,6 +169,10 @@ async def resolve_bikes(db, fleet: dict, models: dict) -> dict:
             upd["price_day"] = info["price_day"]
         if info.get("category"):
             upd["category"] = info["category"]
+        if years.get(key):
+            year = max(years[key], key=years[key].get)  # most common "Anno" among the units
+            if year != bike.get("model_year"):
+                upd["model_year"] = year
         for f in SPEC_FIELDS:
             if info.get(f):
                 upd[f"specs.{f}"] = info[f]

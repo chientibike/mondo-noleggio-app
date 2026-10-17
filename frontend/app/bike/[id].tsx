@@ -96,7 +96,13 @@ export default function BikeDetail() {
     <View style={styles.root}>
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 120 }} testID="bike-detail-scroll">
         <View style={styles.hero}>
-          <Image source={{ uri: bike.image_url }} style={styles.heroImg} contentFit="cover" transition={200} />
+          {bike.image_url ? (
+            <Image source={{ uri: bike.image_url }} style={styles.heroImg} contentFit="cover" transition={200} />
+          ) : (
+            <View style={[styles.heroImg, styles.noImg]}>
+              <Ionicons name="bicycle" size={96} color={colors.muted} />
+            </View>
+          )}
           <LinearGradient colors={["rgba(28,28,30,0.35)", "transparent", "rgba(28,28,30,0.8)"]} style={StyleSheetAbs} />
           <Pressable testID="bike-detail-back" onPress={() => router.back()} style={[styles.backBtn, { top: insets.top + 8 }]}>
             <Ionicons name="chevron-back" size={24} color={colors.onSurface} />
@@ -198,6 +204,7 @@ const useStyles = makeStyles((c) => ({
   muted: { color: c.muted, fontSize: 14 },
   hero: { height: 340, backgroundColor: c.surfaceTertiary },
   heroImg: { width: "100%", height: "100%" },
+  noImg: { alignItems: "center", justifyContent: "center", backgroundColor: c.surfaceTertiary },
   backBtn: { position: "absolute", left: 16, width: 44, height: 44, borderRadius: 22, backgroundColor: c.surface, alignItems: "center", justifyContent: "center" },
   heroText: { position: "absolute", left: 24, right: 24, bottom: 20 },
   heroCat: { color: c.onSurfaceInverse, fontSize: 12, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase" },

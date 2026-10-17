@@ -71,6 +71,7 @@ export type Bike = {
   price_day: number;
   stock: Record<Size, number>;
   available: Record<Size, number>;
+  model_year?: string | null;
 };
 
 export type Booking = {
